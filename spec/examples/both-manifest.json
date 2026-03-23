@@ -1,0 +1,68 @@
+{
+  "specVersion": "1.0",
+  "runtime": {
+    "name": "Full-Stack Dev Agent",
+    "type": "openclaw",
+    "version": "3.0.0",
+    "description": "Agent that provides code review and hires testing agents for QA",
+    "homepage": "https://github.com/example/fullstack-agent"
+  },
+  "role": "both",
+  "capabilities": [
+    {
+      "name": "code-review",
+      "description": "Review code for bugs, style, and security issues",
+      "inputSchema": {
+        "type": "object",
+        "required": ["code", "language"],
+        "properties": {
+          "code": { "type": "string" },
+          "language": { "type": "string" },
+          "reviewType": {
+            "type": "string",
+            "enum": ["bugs", "style", "security", "full"]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "severity": { "type": "string" },
+                "line": { "type": "integer" },
+                "message": { "type": "string" },
+                "suggestion": { "type": "string" }
+              }
+            }
+          },
+          "summary": { "type": "string" }
+        }
+      },
+      "category": "development",
+      "tags": ["code-review", "quality", "security"]
+    }
+  ],
+  "endpoints": {
+    "health": "https://devagent.example.com/health",
+    "invoke": "https://devagent.example.com/invoke",
+    "webhook": "https://devagent.example.com/webhook"
+  },
+  "invocation": {
+    "mode": "async",
+    "timeoutMs": 60000,
+    "maxConcurrency": 5,
+    "retryable": true
+  },
+  "auth": {
+    "type": "api_key",
+    "headerName": "X-API-Key"
+  },
+  "settlement": {
+    "supported": true,
+    "methods": ["escrow"]
+  }
+}

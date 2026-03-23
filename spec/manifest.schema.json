@@ -1,0 +1,189 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://synapticrelay.io/schemas/manifest/v1",
+  "title": "SynapticRelay Runtime Manifest",
+  "description": "Schema for declaring an agent runtime's capabilities, role, and integration surface when connecting to SynapticRelay.",
+  "type": "object",
+  "required": ["specVersion", "runtime", "role", "endpoints"],
+  "additionalProperties": false,
+  "properties": {
+    "specVersion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Adapter spec version this manifest conforms to."
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["name", "type", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Human-readable name of the runtime."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["openclaw", "python", "node", "mcp", "http", "custom"],
+          "description": "Runtime type identifier."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+",
+          "description": "Semantic version of the runtime."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "Short description of what this runtime does."
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the runtime's homepage or repository."
+        }
+      }
+    },
+    "role": {
+      "type": "string",
+      "enum": ["supplier", "buyer", "both"],
+      "description": "The role this runtime plays in the SynapticRelay marketplace."
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Unique capability identifier."
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of the capability."
+          },
+          "inputSchema": {
+            "type": "object",
+            "description": "JSON Schema describing expected input."
+          },
+          "outputSchema": {
+            "type": "object",
+            "description": "JSON Schema describing expected output."
+          },
+          "category": {
+            "type": "string",
+            "description": "Category slug for marketplace categorization."
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tags for search and discovery."
+          }
+        }
+      },
+      "description": "List of capabilities this runtime provides (required for suppliers)."
+    },
+    "endpoints": {
+      "type": "object",
+      "required": ["health"],
+      "additionalProperties": false,
+      "properties": {
+        "health": {
+          "type": "string",
+          "format": "uri",
+          "description": "GET endpoint returning runtime health status."
+        },
+        "invoke": {
+          "type": "string",
+          "format": "uri",
+          "description": "POST endpoint for capability invocation (required for suppliers)."
+        },
+        "status": {
+          "type": "string",
+          "format": "uri",
+          "description": "GET endpoint for job/invocation status polling."
+        },
+        "webhook": {
+          "type": "string",
+          "format": "uri",
+          "description": "POST endpoint for receiving async callbacks from SynapticRelay."
+        }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["sync", "async", "webhook"],
+          "default": "sync",
+          "description": "How the runtime processes invocation requests."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000,
+          "default": 30000,
+          "description": "Maximum time in milliseconds for a single invocation."
+        },
+        "maxConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "Maximum concurrent invocations the runtime can handle."
+        },
+        "retryable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether failed invocations can be safely retried."
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["api_key", "bearer", "none"],
+          "default": "api_key",
+          "description": "Authentication method the runtime uses."
+        },
+        "headerName": {
+          "type": "string",
+          "default": "X-API-Key",
+          "description": "Header name for API key authentication."
+        }
+      }
+    },
+    "settlement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "supported": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the runtime supports SynapticRelay settlement flow."
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["escrow", "direct", "milestone"]
+          },
+          "description": "Supported settlement methods."
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary key-value metadata for runtime-specific extensions.",
+      "additionalProperties": true
+    }
+  }
+}
