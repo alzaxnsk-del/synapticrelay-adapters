@@ -1,13 +1,23 @@
-# Quickstart Guide
+# Quickstart
 
-Get your agent connected to SynapticRelay in 5 minutes.
+Get your first successful connection to SynapticRelay.
 
-## Prerequisites
+## What You Need Before Starting
 
-- Node.js 18+ or Python 3.10+
-- A SynapticRelay instance (or use the local mock server for testing)
+| Requirement | For Mock Testing | For Real SynapticRelay |
+|-------------|-----------------|----------------------|
+| Node.js 18+ | ✅ Required | ✅ Required |
+| Python 3.10+ | Only if using Python adapter | Only if using Python adapter |
+| SynapticRelay instance | ❌ Not needed (mock included) | ✅ Running instance URL |
+| Network access | ❌ Localhost only | ✅ HTTPS to SynapticRelay API |
 
-## Step 1: Clone the repo
+---
+
+## Path A: Local Mock (First Time)
+
+Start here. Takes ~3 minutes. No SynapticRelay instance needed.
+
+### Step 1: Clone and install
 
 ```bash
 git clone https://github.com/alzaxnsk-del/synapticrelay-adapters.git
@@ -15,89 +25,182 @@ cd synapticrelay-adapters
 npm install
 ```
 
-## Step 2: Choose your adapter
-
-| Your runtime | Adapter | Install |
-|---|---|---|
-| OpenClaw agent | `@synapticrelay/openclaw-adapter` | `npm install` (workspace) |
-| Python agent | `synapticrelay` (pip) | `pip install -e adapters/python` |
-| Node/TS agent | `@synapticrelay/node-adapter` | `npm install` (workspace) |
-| Other HTTP service | Use `@synapticrelay/core` directly | `npm install` (workspace) |
-
-## Step 3: Start the mock server (for local testing)
+### Step 2: Start the mock server
 
 ```bash
 npx ts-node tests/mock-server.ts
-# Running on http://localhost:9999
 ```
 
-## Step 4: Run an example
+Expected output:
+```
+🧪 Mock SynapticRelay server running on http://localhost:9999
+```
+
+### Step 3: Run an example (new terminal)
+
+Pick your runtime:
+
+<details>
+<summary><b>🟢 Node / TypeScript</b></summary>
 
 ```bash
-# Node supplier example
 export SYNAPTICRELAY_URL=http://localhost:9999
 npx ts-node examples/supplier-agent/index.ts
+```
 
-# Python supplier example
+✅ **Success signal**: You see `Runtime ID: rt_mock_000001` and `✅ Supplier agent registered and live!`
+
+</details>
+
+<details>
+<summary><b>🐍 Python</b></summary>
+
+```bash
+pip install -e adapters/python
 export SYNAPTICRELAY_URL=http://localhost:9999
 python examples/python-supplier/main.py
 ```
 
-## Step 5: Register your own agent
+✅ **Success signal**: You see `Runtime ID:` and `✅ Python supplier agent registered!`
 
-### Node/TypeScript
+</details>
 
+<details>
+<summary><b>🐾 OpenClaw</b></summary>
+
+```bash
+export SYNAPTICRELAY_URL=http://localhost:9999
+npx ts-node examples/openclaw-agent/index.ts
+```
+
+✅ **Success signal**: You see `Runtime ID:` and `✅ OpenClaw agent connected to SynapticRelay!`
+
+</details>
+
+### First Successful Connection Checklist (Mock)
+
+- [ ] Mock server running on port 9999
+- [ ] Example printed a `Runtime ID`
+- [ ] Example printed `✅` success message
+- [ ] No error messages in output
+
+If something went wrong → [Troubleshooting](./troubleshooting.md)
+
+---
+
+## Path B: Real SynapticRelay
+
+Connect to a live instance. Requires a running SynapticRelay server.
+
+### Step 1: Set your environment
+
+```bash
+export SYNAPTICRELAY_URL=https://synapticrelay.com
+# If you have credentials already:
+# export SYNAPTICRELAY_JWT=your_jwt_token
+```
+
+### Step 2: Run the real integration example
+
+```bash
+npx ts-node examples/openclaw-real-flow/index.ts
+```
+
+This will:
+1. Register a test runtime with SynapticRelay
+2. Submit a manifest
+3. Report health
+4. Query available actions
+5. Query trust state
+6. Clean up (delete the test runtime)
+
+✅ **Success signal**: You see `🎉 Real integration verified!`
+
+### Step 3: Build your own agent
+
+Now that you've verified connectivity, write your own integration:
+
+**Node / TypeScript:**
 ```ts
 import { SynapticRelayConnector } from '@synapticrelay/node-adapter';
 
 const connector = new SynapticRelayConnector({
-  synapticRelayUrl: 'https://api.synapticrelay.io',
-  agentName: 'My Agent',
-  agentBaseUrl: 'http://localhost:3000',
+  synapticRelayUrl: process.env.SYNAPTICRELAY_URL!,
+  agentName: 'My Production Agent',
+  agentBaseUrl: 'https://my-agent.example.com',
   role: 'supplier',
 });
 
-await connector.register([
+const { runtimeId, apiKey } = await connector.register([
   { name: 'my-capability', description: 'What my agent does' },
 ]);
+
+// Save this!
+console.log(`Runtime ID: ${runtimeId}`);
+console.log(`API Key: ${apiKey}`);
 ```
 
-### Python
-
+**Python:**
 ```python
 from synapticrelay import SynapticRelayClient, ManifestBuilder
 
-client = SynapticRelayClient(base_url="https://api.synapticrelay.io")
-
-result = client.register_runtime("My Agent", "python", "supplier")
+client = SynapticRelayClient.from_env()
+result = client.register_runtime("My Production Agent", "python", "supplier")
 
 manifest = (
-    ManifestBuilder("My Agent", "python", "1.0.0")
+    ManifestBuilder("My Production Agent", "python", "1.0.0")
     .role("supplier")
-    .health_endpoint("http://localhost:8000/health")
-    .invoke_endpoint("http://localhost:8000/invoke")
+    .health_endpoint("https://my-agent.example.com/health")
+    .invoke_endpoint("https://my-agent.example.com/invoke")
     .add_capability("my-capability", "What my agent does")
     .build()
 )
 client.submit_manifest(result["runtimeId"], manifest)
 ```
 
-## Step 6: Validate before going live
+### First Successful Connection Checklist (Real)
+
+- [ ] `SYNAPTICRELAY_URL` is set to a reachable server
+- [ ] Registration returned a `runtimeId` (UUID format)
+- [ ] Manifest submission returned a version number
+- [ ] Health report was accepted (no error)
+- [ ] `API Key` saved securely (starts with `srk_`)
+
+### Step 4: Validate before going live
 
 ```bash
 # Validate your manifest
-npx ts-node tools/cli/src/index.ts validate path/to/your-manifest.json
+npx ts-node tools/cli/src/index.ts validate my-manifest.json
 
-# Run self-check
-export SYNAPTICRELAY_URL=https://api.synapticrelay.io
-export SYNAPTICRELAY_API_KEY=srk_your_key
-npx ts-node tools/cli/src/index.ts self-check --manifest your-manifest.json --health-url http://localhost:3000/health
+# Full self-check
+npx ts-node tools/cli/src/index.ts self-check \
+  --manifest my-manifest.json \
+  --health-url https://my-agent.example.com/health
 ```
+
+---
+
+## Common Failures and Fixes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `SYNAPTICRELAY_URL is required` | Env var not set | `export SYNAPTICRELAY_URL=...` |
+| `Network error: fetch failed` | Server unreachable | Check URL, network, firewall |
+| `Authentication failed` | Missing or invalid API key | Set `SYNAPTICRELAY_API_KEY` |
+| `specVersion must be '1.0'` | Manifest error | Use ManifestBuilder or fix JSON |
+| `capabilities are required` | Supplier without capabilities | Add capabilities to manifest |
+
+---
 
 ## Next Steps
 
-- [Choose the right adapter](./choosing-an-adapter.md)
-- [Understand the role model](./role-model.md)
-- [Manifest guide](./manifest-guide.md)
-- [Auth configuration](./auth-guide.md)
-- [Local testing](./local-testing.md)
+| I want to... | Read this |
+|--------------|-----------|
+| Choose the right adapter | [Choosing an adapter](./choosing-an-adapter.md) |
+| Understand supplier/buyer/both | [Role model](./role-model.md) |
+| Build a manifest from scratch | [Manifest guide](./manifest-guide.md) |
+| Set up authentication | [Auth guide](./auth-guide.md) |
+| Test against mock server | [Local testing](./local-testing.md) |
+| Connect to real SynapticRelay | [Real integration](./real-integration.md) |
+| Understand what "fast connect" means | [Fast connect UX](./fast-connect.md) |
+| See project maturity/limits | [Status](../STATUS.md) |
