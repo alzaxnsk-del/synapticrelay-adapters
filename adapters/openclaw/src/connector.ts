@@ -225,7 +225,10 @@ export class OpenClawConnector {
 
   private ensureRegistered(): void {
     if (!this.runtimeId) {
-      throw new Error('Runtime not registered. Call register() first.');
+      throw new Error(
+        'Runtime not registered. You must call `await connector.register()` first.\n' +
+        'If you already registered previously, you must initialize the connector with the saved runtimeId.'
+      );
     }
   }
 }

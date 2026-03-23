@@ -59,9 +59,19 @@ export function configFromEnv(): OpenClawConfig {
   const agentName = process.env.OPENCLAW_AGENT_NAME;
   const agentBaseUrl = process.env.OPENCLAW_AGENT_URL;
 
-  if (!synapticRelayUrl) throw new Error('SYNAPTICRELAY_URL is required');
-  if (!agentName) throw new Error('OPENCLAW_AGENT_NAME is required');
-  if (!agentBaseUrl) throw new Error('OPENCLAW_AGENT_URL is required');
+  if (!synapticRelayUrl) {
+    throw new Error(
+      'Missing config: SYNAPTICRELAY_URL is required.\n' +
+      '  - For local mock: set to http://localhost:9999\n' +
+      '  - For real integration: set to https://api.synapticrelay.io (or your instance)'
+    );
+  }
+  if (!agentName) {
+    throw new Error('Missing config: OPENCLAW_AGENT_NAME is required. Example: "My Agent"');
+  }
+  if (!agentBaseUrl) {
+    throw new Error('Missing config: OPENCLAW_AGENT_URL is required. Example: "http://localhost:3000"');
+  }
 
   const role = (process.env.OPENCLAW_ROLE || 'supplier') as RuntimeRole;
   if (!['supplier', 'buyer', 'both'].includes(role)) {
