@@ -11,11 +11,7 @@
  * - Mapping MCP tool schemas to SynapticRelay capability format
  * - Translating invocation requests between MCP and SynapticRelay formats
  *
- * What MCP does NOT replace:
- * - SynapticRelay registration (POST /api/v1/integration/runtimes)
- * - Marketplace actions (orders, shortlists, contracts, settlement)
- * - Health reporting
- * - Auth model
+ * What MCP does NOT replace:\n * - SynapticRelay Agent Action API (POST /api/v1/agent/action)\n * - Marketplace actions (orders, contracts, settlement)\n * - Auth model
  */
 
 import type { Capability } from '@synapticrelay/core';

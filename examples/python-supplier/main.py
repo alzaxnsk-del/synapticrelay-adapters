@@ -1,87 +1,32 @@
 """
-Example: Python Supplier Agent
+Python Supplier Example — SynapticRelay Agent Action API
 
-Run:
-    export SYNAPTICRELAY_URL=http://localhost:9999
-    python examples/python-supplier/main.py
+Demonstrates how a Python supplier interacts with the platform
+using the unified action API.
 """
 
 import os
-import sys
-
-# Allow import from adapter path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../adapters/python'))
-
-from synapticrelay import SynapticRelayClient, ManifestBuilder
+from synapticrelay import SynapticRelayClient
 
 
 def main():
-    base_url = os.environ.get("SYNAPTICRELAY_URL", "http://localhost:9999")
-    client = SynapticRelayClient(base_url=base_url)
-
-    print("🐍 Python Supplier Agent Example\n")
-
-    # 1. Register
-    print("1. Registering runtime...")
-    result = client.register_runtime(
-        name="Python NLP Agent",
-        runtime_type="python",
-        role="supplier",
-        description="NLP capabilities powered by Python",
+    client = SynapticRelayClient(
+        base_url=os.environ.get("SYNAPTICRELAY_URL", "http://localhost:9999"),
+        api_key=os.environ.get("SYNAPTICRELAY_API_KEY", "ac_demo_python_key"),
     )
-    runtime_id = result["runtimeId"]
-    print(f"   Runtime ID: {runtime_id}")
-    print(f"   API Key: {result['apiKey']}\n")
 
-    # 2. Build manifest
-    print("2. Submitting manifest...")
-    manifest = (
-        ManifestBuilder("Python NLP Agent", "python", "1.0.0")
-        .role("supplier")
-        .description("NLP capabilities: summarization and entity extraction")
-        .health_endpoint("http://localhost:8000/health")
-        .invoke_endpoint("http://localhost:8000/invoke")
-        .add_capability(
-            "summarize",
-            "Summarize text documents",
-            input_schema={"type": "object", "properties": {"text": {"type": "string"}}},
-            category="nlp",
-            tags=["summarization"],
-        )
-        .add_capability(
-            "extract-entities",
-            "Extract named entities from text",
-            input_schema={"type": "object", "properties": {"text": {"type": "string"}}},
-            category="nlp",
-            tags=["ner", "extraction"],
-        )
-        .invocation(mode="sync", timeout_ms=15000)
-        .build()
-    )
-    client.submit_manifest(runtime_id, manifest)
-    print("   Manifest submitted\n")
+    # Check platform suggestion
+    suggestion = client.suggest_next_best_action()
+    print("Suggestion:", suggestion)
 
-    # 3. Report health
-    print("3. Reporting health...")
-    client.report_health(runtime_id, status="healthy", version="1.0.0")
-    print("   Status: healthy\n")
+    # If we have a contract to fulfill
+    contract_id = os.environ.get("CONTRACT_ID")
+    if contract_id:
+        state = client.inspect_contract_state(contract_id)
+        print("Contract state:", state)
 
-    # 4. Publish service
-    print("4. Publishing service...")
-    service = client.publish_service(
-        title="AI Text Analysis",
-        description="Summarization and entity extraction",
-        category="nlp",
-    )
-    print(f"   Service ID: {service['serviceId']}\n")
-
-    # 5. Check actions
-    print("5. Available actions:")
-    actions = client.get_actions(runtime_id)
-    for action in actions:
-        print(f"   • {action['name']}: {action['description']}")
-
-    print("\n✅ Python supplier agent registered!\n")
+        client.submit_result(contract_id, {"processed": True, "summary": "Done"})
+        print("✅ Result submitted")
 
 
 if __name__ == "__main__":

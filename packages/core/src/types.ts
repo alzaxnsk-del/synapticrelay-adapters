@@ -8,6 +8,81 @@ export type AuthType = 'api_key' | 'bearer' | 'none';
 export type SettlementMethod = 'escrow' | 'direct' | 'milestone';
 export type InvocationStatus = 'processing' | 'completed' | 'failed';
 
+// ─── Agent Action Types ─────────────────────────────────────────────
+
+/**
+ * All platform actions go through POST /api/v1/agent/action.
+ */
+export type AgentActionName =
+  | 'search_suppliers'
+  | 'create_order_from_goal'
+  | 'select_supplier_for_order'
+  | 'submit_result'
+  | 'get_result'
+  | 'suggest_next_best_action'
+  | 'inspect_contract_state';
+
+export interface AgentActionRequest<P = Record<string, unknown>> {
+  action: AgentActionName;
+  params: P;
+}
+
+export interface MatchCandidate {
+  agentId: string;
+  name: string;
+  score: number;
+  price?: number;
+  category?: string;
+}
+
+export interface Order {
+  orderId: string;
+  title: string;
+  status: string;
+}
+
+export interface Contract {
+  contractId: string;
+  orderId: string;
+  supplierId: string;
+  status: string;
+}
+
+export interface ContractState {
+  contractId: string;
+  status: string;
+  supplierId: string;
+  buyerId: string;
+  createdAt: string;
+  updatedAt: string;
+  resultReady?: boolean;
+}
+
+export interface ActionResult {
+  resultId: string;
+  contractId: string;
+  data: Record<string, unknown>;
+  submittedAt: string;
+}
+
+export interface Suggestion {
+  action: AgentActionName;
+  reason: string;
+  params?: Record<string, unknown>;
+}
+
+// ─── Push Notification Types ────────────────────────────────────────
+
+export type PushEventType = 'contract.execute' | 'contract.result_ready';
+
+export interface PushNotification {
+  event: PushEventType;
+  contractId: string;
+  orderId: string;
+  data?: Record<string, unknown>;
+  timestamp: string;
+}
+
 // ─── Manifest Types ─────────────────────────────────────────────────
 
 export interface Capability {
@@ -63,44 +138,7 @@ export interface RuntimeManifest {
   metadata?: Record<string, unknown>;
 }
 
-// ─── API Types ──────────────────────────────────────────────────────
-
-export interface RegisterRuntimeRequest {
-  name: string;
-  type: RuntimeType;
-  role: RuntimeRole;
-  description?: string;
-}
-
-export interface RegisterRuntimeResponse {
-  runtimeId: string;
-  apiKey: string;
-  createdAt: string;
-}
-
-export interface RuntimeDetails {
-  id: string;
-  name: string;
-  type: RuntimeType;
-  role: RuntimeRole;
-  status: string;
-  healthStatus: HealthStatus;
-  healthEndpoint?: string;
-  invokeEndpoint?: string;
-  lastHealthCheckAt?: string;
-  currentManifestVersion?: number;
-  agentId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface HealthReport {
-  status: HealthStatus;
-  version?: string;
-  uptime?: number;
-  capabilities?: string[];
-  details?: Record<string, unknown>;
-}
+// ─── Invocation Types ───────────────────────────────────────────────
 
 export interface InvocationRequest {
   invocationId: string;
@@ -118,32 +156,13 @@ export interface InvocationResponse {
   estimatedCompletionMs?: number;
 }
 
-export interface RuntimeAction {
-  name: string;
-  description: string;
-  method: string;
-  path: string;
-  available: boolean;
-  reason?: string;
-}
-
-export interface TrustState {
-  verified: boolean;
-  reputationScore?: number;
-  totalContracts?: number;
-  completedContracts?: number;
-  disputes?: number;
-}
-
 // ─── Config ─────────────────────────────────────────────────────────
 
 export interface SynapticRelayConfig {
-  /** Base URL of the SynapticRelay API (e.g., https://api.synapticrelay.io) */
+  /** Base URL of the SynapticRelay API (e.g., https://synapticrelay.com) */
   baseUrl: string;
-  /** API key for authentication */
-  apiKey?: string;
-  /** JWT token for owner-level operations */
-  jwtToken?: string;
+  /** API key for authentication (ac_...) */
+  apiKey: string;
   /** Request timeout in ms (default: 30000) */
   timeoutMs?: number;
 }

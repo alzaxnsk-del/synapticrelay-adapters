@@ -11,7 +11,7 @@ export class SynapticRelayError extends Error {
 }
 
 export class AuthenticationError extends SynapticRelayError {
-  constructor(message = 'Authentication failed') {
+  constructor(message = 'Authentication failed — check your API key (ac_...)') {
     super(message, 'AUTH_FAILED', 401);
     this.name = 'AuthenticationError';
   }
@@ -24,13 +24,6 @@ export class ManifestValidationError extends SynapticRelayError {
   ) {
     super(message, 'MANIFEST_INVALID', 400, { validationErrors });
     this.name = 'ManifestValidationError';
-  }
-}
-
-export class RegistrationError extends SynapticRelayError {
-  constructor(message: string, details?: Record<string, unknown>) {
-    super(message, 'REGISTRATION_FAILED', 400, details);
-    this.name = 'RegistrationError';
   }
 }
 

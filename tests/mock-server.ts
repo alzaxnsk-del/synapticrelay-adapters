@@ -1,46 +1,23 @@
 /**
- * Mock SynapticRelay Integration Surface Server
+ * Mock SynapticRelay Agent API Server
  *
- * A lightweight HTTP server that mimics the SynapticRelay API for local testing.
- * Supports: runtime registration, manifest submission, health reporting, and
- * basic marketplace actions.
+ * A lightweight HTTP server that mimics the unified SynapticRelay Agent API
+ * for local testing. All actions go through POST /api/v1/agent/action.
  *
  * Usage:
  *   npx ts-node tests/mock-server.ts
- *   # or
- *   node tests/mock-server.js
  *
  * The mock server runs on port 9999 by default (configurable via MOCK_PORT env).
  */
 
 import * as http from 'http';
 
-interface MockRuntime {
-  id: string;
-  name: string;
-  type: string;
-  role: string;
-  description?: string;
-  status: string;
-  healthStatus: string;
-  apiKey: string;
-  manifest?: Record<string, unknown>;
-  manifestVersion: number;
-  createdAt: string;
-}
-
 // ─── In-Memory Store ──────────────────────────────────────────────
 
-const runtimes = new Map<string, MockRuntime>();
-let nextId = 1;
-
-function generateId(): string {
-  return `rt_mock_${(nextId++).toString().padStart(6, '0')}`;
-}
-
-function generateApiKey(): string {
-  return `srk_mock_${Math.random().toString(36).substring(2, 18)}`;
-}
+const orders = new Map<string, { orderId: string; title: string; status: string }>();
+const contracts = new Map<string, { contractId: string; orderId: string; supplierId: string; status: string; result?: Record<string, unknown> }>();
+let nextOrderId = 1;
+let nextContractId = 1;
 
 // ─── Request Handling ─────────────────────────────────────────────
 
@@ -64,6 +41,94 @@ function json(res: http.ServerResponse, status: number, data: unknown): void {
   res.end(JSON.stringify(data));
 }
 
+// ─── Action Handlers ──────────────────────────────────────────────
+
+function handleAction(action: string, params: Record<string, unknown>): { status: number; body: unknown } {
+  switch (action) {
+    case 'search_suppliers':
+      return {
+        status: 200,
+        body: [
+          { agentId: 'supplier-mock-1', name: 'Premium Data Service', score: 0.95, price: 0.05, category: params.categoryId || 'general' },
+          { agentId: 'supplier-mock-2', name: 'Standard Data Service', score: 0.88, price: 0.01, category: params.categoryId || 'general' },
+        ],
+      };
+
+    case 'create_order_from_goal': {
+      const orderId = `ord_mock_${(nextOrderId++).toString().padStart(4, '0')}`;
+      const order = { orderId, title: `Order: ${params.goal}`, status: 'open' };
+      orders.set(orderId, order);
+      return { status: 201, body: order };
+    }
+
+    case 'select_supplier_for_order': {
+      const contractId = `ctr_mock_${(nextContractId++).toString().padStart(4, '0')}`;
+      const contract = {
+        contractId,
+        orderId: params.orderId as string,
+        supplierId: params.supplierId as string,
+        status: 'executing',
+      };
+      contracts.set(contractId, contract);
+      return { status: 200, body: contract };
+    }
+
+    case 'submit_result': {
+      const contract = contracts.get(params.contractId as string);
+      if (!contract) return { status: 404, body: { code: 'NOT_FOUND', message: 'Contract not found' } };
+      contract.status = 'result_ready';
+      contract.result = params.result as Record<string, unknown>;
+      return { status: 200, body: { received: true } };
+    }
+
+    case 'get_result': {
+      const c = contracts.get(params.contractId as string);
+      if (!c) return { status: 404, body: { code: 'NOT_FOUND', message: 'Contract not found' } };
+      return {
+        status: 200,
+        body: {
+          resultId: `res_mock_${Date.now()}`,
+          contractId: c.contractId,
+          data: c.result || {},
+          submittedAt: new Date().toISOString(),
+        },
+      };
+    }
+
+    case 'suggest_next_best_action':
+      return {
+        status: 200,
+        body: {
+          action: 'search_suppliers',
+          reason: 'You have no active orders. Start by searching for suppliers.',
+          params: { limit: 10 },
+        },
+      };
+
+    case 'inspect_contract_state': {
+      const ct = contracts.get(params.contractId as string);
+      if (!ct) return { status: 404, body: { code: 'NOT_FOUND', message: 'Contract not found' } };
+      return {
+        status: 200,
+        body: {
+          contractId: ct.contractId,
+          status: ct.status,
+          supplierId: ct.supplierId,
+          buyerId: 'buyer-mock',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          resultReady: ct.status === 'result_ready',
+        },
+      };
+    }
+
+    default:
+      return { status: 400, body: { code: 'UNKNOWN_ACTION', message: `Unknown action: ${action}` } };
+  }
+}
+
+// ─── Request Router ───────────────────────────────────────────────
+
 async function handleRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -72,177 +137,38 @@ async function handleRequest(
   const path = url.pathname;
   const method = req.method || 'GET';
 
-  // ── POST /api/v1/integration/runtimes ──
-  if (method === 'POST' && path === '/api/v1/integration/runtimes') {
-    const body = await parseBody(req);
-    const runtime: MockRuntime = {
-      id: generateId(),
-      name: body.name as string,
-      type: body.type as string,
-      role: body.role as string,
-      description: body.description as string | undefined,
-      status: 'active',
-      healthStatus: 'unknown',
-      apiKey: generateApiKey(),
-      manifestVersion: 0,
-      createdAt: new Date().toISOString(),
-    };
-    runtimes.set(runtime.id, runtime);
-    return json(res, 201, {
-      runtimeId: runtime.id,
-      apiKey: runtime.apiKey,
-      createdAt: runtime.createdAt,
-    });
+  // Validate API key
+  const apiKey = req.headers['x-api-key'] as string;
+  if (!apiKey || !apiKey.startsWith('ac_')) {
+    return json(res, 401, { code: 'AUTH_FAILED', message: 'Missing or invalid API key. Expected ac_...' });
   }
 
-  // ── GET /api/v1/integration/runtimes ──
-  if (method === 'GET' && path === '/api/v1/integration/runtimes') {
-    return json(res, 200, Array.from(runtimes.values()).map(({ apiKey: _, ...r }) => r));
-  }
-
-  // ── Runtime-specific routes ──
-  const runtimeMatch = path.match(/^\/api\/v1\/integration\/runtimes\/([^/]+)(\/.*)?$/);
-  if (runtimeMatch) {
-    const runtimeId = runtimeMatch[1];
-    const subPath = runtimeMatch[2] || '';
-    const runtime = runtimes.get(runtimeId);
-
-    if (!runtime) {
-      return json(res, 404, { code: 'NOT_FOUND', message: 'Runtime not found' });
-    }
-
-    // GET /runtimes/:id
-    if (method === 'GET' && !subPath) {
-      const { apiKey: _, ...details } = runtime;
-      return json(res, 200, details);
-    }
-
-    // DELETE /runtimes/:id
-    if (method === 'DELETE' && !subPath) {
-      runtimes.delete(runtimeId);
-      return json(res, 204, null);
-    }
-
-    // POST /runtimes/:id/manifest
-    if (method === 'POST' && subPath === '/manifest') {
-      const manifest = await parseBody(req);
-      runtime.manifest = manifest;
-      runtime.manifestVersion++;
-      return json(res, 200, { version: runtime.manifestVersion });
-    }
-
-    // GET /runtimes/:id/manifest
-    if (method === 'GET' && subPath === '/manifest') {
-      return json(res, 200, { ...runtime.manifest, version: runtime.manifestVersion });
-    }
-
-    // POST /runtimes/:id/health
-    if (method === 'POST' && subPath === '/health') {
-      const body = await parseBody(req);
-      runtime.healthStatus = body.status as string;
-      return json(res, 200, { received: true });
-    }
-
-    // GET /runtimes/:id/health
-    if (method === 'GET' && subPath === '/health') {
-      return json(res, 200, {
-        healthStatus: runtime.healthStatus,
-        lastCheckAt: new Date().toISOString(),
-      });
-    }
-
-    // POST /runtimes/:id/role
-    if (method === 'POST' && subPath === '/role') {
-      const body = await parseBody(req);
-      runtime.role = body.role as string;
-      const { apiKey: _, ...details } = runtime;
-      return json(res, 200, details);
-    }
-
-    // GET /runtimes/:id/actions
-    if (method === 'GET' && subPath === '/actions') {
-      const supplierActions = [
-        { name: 'publish_service', description: 'Publish a service listing', method: 'POST', path: '/api/v1/market/services', available: true },
-        { name: 'view_contracts', description: 'View incoming contracts', method: 'GET', path: `/api/v1/integration/runtimes/${runtimeId}/contracts`, available: true },
-      ];
-      const buyerActions = [
-        { name: 'create_order', description: 'Create a marketplace order', method: 'POST', path: '/api/v1/market/orders', available: true },
-        { name: 'market_search_suppliers', description: 'Search the marketplace for suppliers', method: 'POST', path: '/api/v1/agent/action', available: true },
-        { name: 'view_shortlist', description: 'View matching suppliers', method: 'GET', path: '/api/v1/market/orders/:id/shortlist', available: true },
-      ];
-      let actions = runtime.role === 'supplier' ? supplierActions :
-                    runtime.role === 'buyer' ? buyerActions :
-                    [...supplierActions, ...buyerActions];
-      return json(res, 200, actions);
-    }
-
-    // GET /runtimes/:id/trust
-    if (method === 'GET' && subPath === '/trust') {
-      return json(res, 200, {
-        verified: false,
-        reputationScore: 0,
-        totalContracts: 0,
-        completedContracts: 0,
-        disputes: 0,
-      });
-    }
-
-    // GET /runtimes/:id/contracts
-    if (method === 'GET' && subPath === '/contracts') {
-      return json(res, 200, []);
-    }
-  }
-
-  // ── Marketplace routes ──
-
-  // POST /api/v1/market/services
-  if (method === 'POST' && path === '/api/v1/market/services') {
-    return json(res, 201, { serviceId: `svc_mock_${Date.now()}` });
-  }
-
-  // POST /api/v1/market/orders
-  if (method === 'POST' && path === '/api/v1/market/orders') {
-    return json(res, 201, { orderId: `ord_mock_${Date.now()}` });
-  }
-
-  // POST /api/v1/agent/action
+  // POST /api/v1/agent/action — the only endpoint
   if (method === 'POST' && path === '/api/v1/agent/action') {
-    return json(res, 200, [
-      { agentId: 'supplier-mock-1', score: 0.95, name: 'Premium Data Service', price: 0.05 },
-      { agentId: 'supplier-mock-2', score: 0.88, name: 'Standard Data Service', price: 0.01 }
-    ]);
+    const body = await parseBody(req);
+    const action = body.action as string;
+    const params = (body.params as Record<string, unknown>) || {};
+
+    if (!action) {
+      return json(res, 400, { code: 'MISSING_ACTION', message: 'action field is required' });
+    }
+
+    const result = handleAction(action, params);
+    return json(res, result.status, result.body);
   }
 
-  // GET /api/v1/market/orders/:id/shortlist
-  const shortlistMatch = path.match(/^\/api\/v1\/market\/orders\/([^/]+)\/shortlist$/);
-  if (method === 'GET' && shortlistMatch) {
-    return json(res, 200, [
-      { agentId: 'agent_mock_001', score: 0.95, name: 'Top Supplier Agent' },
-      { agentId: 'agent_mock_002', score: 0.87, name: 'Good Supplier Agent' },
-    ]);
-  }
-
-  // POST /api/v1/market/orders/:id/shortlist (select)
-  if (method === 'POST' && shortlistMatch) {
-    return json(res, 200, { contractId: `ctr_mock_${Date.now()}` });
-  }
-
-  // POST /api/v1/market/contracts
-  if (method === 'POST' && path === '/api/v1/market/contracts') {
-    return json(res, 201, { contractId: `ctr_mock_${Date.now()}` });
-  }
-
-  // GET /api/v1/market/contracts/:id/receipt
-  const receiptMatch = path.match(/^\/api\/v1\/market\/contracts\/([^/]+)\/receipt$/);
-  if (method === 'GET' && receiptMatch) {
+  // POST /api/v1/onboarding/check-in — for bridge onboarding
+  if (method === 'POST' && path === '/api/v1/onboarding/check-in') {
+    const body = await parseBody(req);
     return json(res, 200, {
-      contractId: receiptMatch[1],
-      status: 'completed',
-      completedAt: new Date().toISOString(),
+      data: {
+        sessionId: `ses_mock_${Date.now()}`,
+        status: 'inspecting',
+        apiKey: `ac_mock_${Math.random().toString(36).substring(2, 18)}`,
+      },
     });
   }
 
-  // Default 404
   json(res, 404, { code: 'NOT_FOUND', message: `${method} ${path} not found` });
 }
 
@@ -259,26 +185,12 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.info(`\n🧪 Mock SynapticRelay server running on http://localhost:${PORT}\n`);
-  console.info('Available endpoints:');
-  console.info('  POST   /api/v1/integration/runtimes          — Register runtime');
-  console.info('  GET    /api/v1/integration/runtimes          — List runtimes');
-  console.info('  GET    /api/v1/integration/runtimes/:id      — Get runtime');
-  console.info('  DELETE /api/v1/integration/runtimes/:id      — Delete runtime');
-  console.info('  POST   /api/v1/integration/runtimes/:id/manifest — Submit manifest');
-  console.info('  GET    /api/v1/integration/runtimes/:id/manifest — Get manifest');
-  console.info('  POST   /api/v1/integration/runtimes/:id/health   — Report health');
-  console.info('  GET    /api/v1/integration/runtimes/:id/health   — Get health');
-  console.info('  POST   /api/v1/integration/runtimes/:id/role     — Change role');
-  console.info('  GET    /api/v1/integration/runtimes/:id/actions  — Get actions');
-  console.info('  GET    /api/v1/integration/runtimes/:id/trust    — Get trust');
-  console.info('  GET    /api/v1/integration/runtimes/:id/contracts — Get contracts');
-  console.info('  POST   /api/v1/market/services                — Publish service');
-  console.info('  POST   /api/v1/market/orders                  — Create order');
-  console.info('  GET    /api/v1/market/orders/:id/shortlist    — Get shortlist');
-  console.info('  POST   /api/v1/market/contracts               — Open contract');
-  console.info('  GET    /api/v1/market/contracts/:id/receipt   — Get receipt');
-  console.info('');
+  console.info(`\n🧪 Mock SynapticRelay Agent API server on http://localhost:${PORT}\n`);
+  console.info('Endpoints:');
+  console.info('  POST /api/v1/agent/action        — All agent actions');
+  console.info('  POST /api/v1/onboarding/check-in  — Bridge onboarding');
+  console.info('\nActions: search_suppliers, create_order_from_goal, select_supplier_for_order,');
+  console.info('         submit_result, get_result, suggest_next_best_action, inspect_contract_state\n');
 });
 
 export { server };

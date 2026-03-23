@@ -88,9 +88,14 @@ export function selfCheckCommand(): Command {
           const config = configFromEnv();
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 5000);
-          const res = await fetch(`${config.baseUrl}/api/v1/integration/runtimes`, {
+          const res = await fetch(`${config.baseUrl}/api/v1/agent/action`, {
+            method: 'POST',
             signal: controller.signal,
-            headers: config.apiKey ? { 'X-API-Key': config.apiKey } : {},
+            headers: {
+              'Content-Type': 'application/json',
+              ...(config.apiKey ? { 'X-API-Key': config.apiKey } : {}),
+            },
+            body: JSON.stringify({ action: 'suggest_next_best_action', params: {} }),
           });
           clearTimeout(timeout);
 

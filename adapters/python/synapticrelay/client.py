@@ -1,8 +1,9 @@
 """
-SynapticRelay API Client for Python.
+SynapticRelay Agent API Client for Python.
 
-Covers the integration surface (/api/v1/integration/*) and marketplace
-endpoints (/api/v1/market/*).
+All platform actions go through POST /api/v1/agent/action.
+Auth: X-API-Key header with a permanent key (ac_...).
+The agentId is automatically resolved from the API key.
 """
 
 from __future__ import annotations
@@ -23,18 +24,16 @@ class SynapticRelayError(Exception):
 
 
 class SynapticRelayClient:
-    """HTTP client for the SynapticRelay Integration Surface API."""
+    """HTTP client for the SynapticRelay Agent API."""
 
     def __init__(
         self,
         base_url: str,
-        api_key: str | None = None,
-        jwt_token: str | None = None,
+        api_key: str,
         timeout: float = 30.0,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
-        self.jwt_token = jwt_token
         self._client = httpx.Client(timeout=timeout)
 
     @classmethod
@@ -43,37 +42,34 @@ class SynapticRelayClient:
 
         Reads:
             SYNAPTICRELAY_URL — base API URL (required)
-            SYNAPTICRELAY_API_KEY — API key
-            SYNAPTICRELAY_JWT — JWT token
+            SYNAPTICRELAY_API_KEY — permanent API key ac_... (required)
             SYNAPTICRELAY_TIMEOUT — request timeout in seconds
         """
         base_url = os.environ.get("SYNAPTICRELAY_URL")
+        api_key = os.environ.get("SYNAPTICRELAY_API_KEY")
         if not base_url:
-            raise ValueError(
-                "SYNAPTICRELAY_URL environment variable is required. "
-                "Set it to your SynapticRelay instance URL."
-            )
+            raise ValueError("SYNAPTICRELAY_URL environment variable is required.")
+        if not api_key:
+            raise ValueError("SYNAPTICRELAY_API_KEY environment variable is required.")
         return cls(
             base_url=base_url,
-            api_key=os.environ.get("SYNAPTICRELAY_API_KEY"),
-            jwt_token=os.environ.get("SYNAPTICRELAY_JWT"),
+            api_key=api_key,
             timeout=float(os.environ.get("SYNAPTICRELAY_TIMEOUT", "30")),
         )
 
     def _headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        if self.jwt_token:
-            headers["Authorization"] = f"Bearer {self.jwt_token}"
-        return headers
+        return {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-API-Key": self.api_key,
+        }
 
     def _request(self, method: str, path: str, json: Any = None) -> Any:
         url = f"{self.base_url}{path}"
         response = self._client.request(method, url, headers=self._headers(), json=json)
 
         if response.status_code == 401:
-            raise SynapticRelayError("Authentication failed", "AUTH_FAILED", 401)
+            raise SynapticRelayError("Authentication failed — check your API key (ac_...)", "AUTH_FAILED", 401)
 
         if response.status_code >= 400:
             try:
@@ -91,154 +87,58 @@ class SynapticRelayClient:
 
         return response.json()
 
-    # ─── Runtime Registration ─────────────────────────────────────
+    # ─── Universal Action Dispatcher ─────────────────────────────
 
-    def register_runtime(
-        self,
-        name: str,
-        runtime_type: str = "python",
-        role: str = "supplier",
-        description: str | None = None,
-    ) -> dict[str, Any]:
-        """Register a new runtime with SynapticRelay.
+    def action(self, action_name: str, params: dict[str, Any] | None = None) -> Any:
+        """Send any action to POST /api/v1/agent/action."""
+        return self._request("POST", "/api/v1/agent/action", json={
+            "action": action_name,
+            "params": params or {},
+        })
 
-        Returns:
-            dict with runtimeId and apiKey
-        """
-        data: dict[str, Any] = {"name": name, "type": runtime_type, "role": role}
-        if description:
-            data["description"] = description
-
-        result = self._request("POST", "/api/v1/integration/runtimes", json=data)
-
-        # Auto-store the API key
-        if result and result.get("apiKey"):
-            self.api_key = result["apiKey"]
-
-        return result
-
-    def get_runtime(self, runtime_id: str) -> dict[str, Any]:
-        """Get runtime details."""
-        return self._request("GET", f"/api/v1/integration/runtimes/{runtime_id}")
-
-    def list_runtimes(self) -> list[dict[str, Any]]:
-        """List all runtimes owned by the authenticated user."""
-        return self._request("GET", "/api/v1/integration/runtimes")
-
-    def delete_runtime(self, runtime_id: str) -> None:
-        """Delete/deregister a runtime."""
-        self._request("DELETE", f"/api/v1/integration/runtimes/{runtime_id}")
-
-    def change_role(self, runtime_id: str, role: str) -> dict[str, Any]:
-        """Change runtime role (supplier, buyer, both)."""
-        return self._request(
-            "POST", f"/api/v1/integration/runtimes/{runtime_id}/role", json={"role": role}
-        )
-
-    # ─── Manifest ─────────────────────────────────────────────────
-
-    def submit_manifest(self, runtime_id: str, manifest: dict[str, Any]) -> dict[str, Any]:
-        """Submit a runtime manifest."""
-        return self._request(
-            "POST", f"/api/v1/integration/runtimes/{runtime_id}/manifest", json=manifest
-        )
-
-    def get_manifest(self, runtime_id: str) -> dict[str, Any]:
-        """Get the current manifest for a runtime."""
-        return self._request("GET", f"/api/v1/integration/runtimes/{runtime_id}/manifest")
-
-    # ─── Health ───────────────────────────────────────────────────
-
-    def report_health(
-        self,
-        runtime_id: str,
-        status: str = "healthy",
-        version: str | None = None,
-        capabilities: list[str] | None = None,
-    ) -> None:
-        """Report runtime health status."""
-        data: dict[str, Any] = {"status": status}
-        if version:
-            data["version"] = version
-        if capabilities:
-            data["capabilities"] = capabilities
-        self._request("POST", f"/api/v1/integration/runtimes/{runtime_id}/health", json=data)
-
-    def get_health(self, runtime_id: str) -> dict[str, Any]:
-        """Get runtime health status."""
-        return self._request("GET", f"/api/v1/integration/runtimes/{runtime_id}/health")
-
-    # ─── Actions & Trust ──────────────────────────────────────────
-
-    def get_actions(self, runtime_id: str) -> list[dict[str, Any]]:
-        """Get available actions for this runtime (role-aware)."""
-        return self._request("GET", f"/api/v1/integration/runtimes/{runtime_id}/actions")
-
-    def get_trust(self, runtime_id: str) -> dict[str, Any]:
-        """Get trust/verification state."""
-        return self._request("GET", f"/api/v1/integration/runtimes/{runtime_id}/trust")
-
-    def get_contracts(self, runtime_id: str) -> list[dict[str, Any]]:
-        """Get contracts involving this runtime."""
-        return self._request("GET", f"/api/v1/integration/runtimes/{runtime_id}/contracts")
-
-    # ─── Marketplace ──────────────────────────────────────────────
-
-    def publish_service(
-        self, title: str, description: str, category: str, price: float | None = None
-    ) -> dict[str, Any]:
-        """Publish a service listing."""
-        data: dict[str, Any] = {"title": title, "description": description, "category": category}
-        if price is not None:
-            data["price"] = price
-        return self._request("POST", "/api/v1/market/services", json=data)
-
-    def create_order(
-        self, goal: str, category: str | None = None, budget: float | None = None
-    ) -> dict[str, Any]:
-        """Create a marketplace order (buyer action)."""
-        data: dict[str, Any] = {"goal": goal}
-        if category:
-            data["category"] = category
-        if budget is not None:
-            data["budget"] = budget
-        return self._request("POST", "/api/v1/market/orders", json=data)
+    # ─── Typed Convenience Methods ───────────────────────────────
 
     def search_suppliers(
-        self, agent_id: str, category_id: str | None = None, max_price: float | None = None, limit: int = 20
+        self, category_id: str | None = None, max_price: float | None = None, limit: int = 20
     ) -> list[dict[str, Any]]:
-        """Search the marketplace for suppliers directly."""
-        params: dict[str, Any] = {"agentId": agent_id, "limit": limit}
+        """Search the marketplace for suppliers."""
+        params: dict[str, Any] = {"limit": limit}
         if category_id is not None:
             params["categoryId"] = category_id
         if max_price is not None:
             params["maxPrice"] = max_price
-        
-        return self._request(
-            "POST", 
-            "/api/v1/agent/action", 
-            json={"action": "search_suppliers", "params": params}
-        )
+        return self.action("search_suppliers", params)
 
-    def get_shortlist(self, order_id: str) -> list[dict[str, Any]]:
-        """Get matching suppliers for an order."""
-        return self._request("GET", f"/api/v1/market/orders/{order_id}/shortlist")
-
-    def select_supplier(self, order_id: str, agent_id: str) -> dict[str, Any]:
-        """Select a supplier from the shortlist."""
-        return self._request(
-            "POST", f"/api/v1/market/orders/{order_id}/shortlist", json={"agentId": agent_id}
-        )
-
-    def open_contract(
-        self, order_id: str, supplier_id: str, terms: dict | None = None
+    def create_order_from_goal(
+        self, goal: str, category: str | None = None, budget: float | None = None
     ) -> dict[str, Any]:
-        """Open a contract with a selected supplier."""
-        data: dict[str, Any] = {"orderId": order_id, "supplierId": supplier_id}
-        if terms:
-            data["terms"] = terms
-        return self._request("POST", "/api/v1/market/contracts", json=data)
+        """Create an order from a goal description."""
+        params: dict[str, Any] = {"goal": goal}
+        if category:
+            params["category"] = category
+        if budget is not None:
+            params["budget"] = budget
+        return self.action("create_order_from_goal", params)
 
-    def get_receipt(self, contract_id: str) -> dict[str, Any]:
-        """Get receipt for a completed contract."""
-        return self._request("GET", f"/api/v1/market/contracts/{contract_id}/receipt")
+    def select_supplier_for_order(self, order_id: str, supplier_id: str) -> dict[str, Any]:
+        """Select a supplier for an order (auto-contract + push)."""
+        return self.action("select_supplier_for_order", {
+            "orderId": order_id,
+            "supplierId": supplier_id,
+        })
+
+    def submit_result(self, contract_id: str, result: dict[str, Any]) -> None:
+        """Supplier submits result for a contract (push to buyer)."""
+        self.action("submit_result", {"contractId": contract_id, "result": result})
+
+    def get_result(self, contract_id: str) -> dict[str, Any]:
+        """Buyer retrieves the result for a contract."""
+        return self.action("get_result", {"contractId": contract_id})
+
+    def suggest_next_best_action(self) -> dict[str, Any]:
+        """Get the platform's recommendation for the next best action."""
+        return self.action("suggest_next_best_action")
+
+    def inspect_contract_state(self, contract_id: str) -> dict[str, Any]:
+        """Inspect the current state of a contract."""
+        return self.action("inspect_contract_state", {"contractId": contract_id})

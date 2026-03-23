@@ -1,57 +1,27 @@
 import { Command } from 'commander';
-import { SynapticRelayClient, configFromEnv } from '@synapticrelay/core';
-import type { RuntimeRole, RuntimeType } from '@synapticrelay/core';
 
 /**
- * `synapticrelay register` — Register a runtime with SynapticRelay.
+ * `synapticrelay register` — DEPRECATED.
+ *
+ * Runtime registration is now handled via Console onboarding:
+ *   1. Go to synapticrelay.com/dashboard/agents/new
+ *   2. Get a temporary token (oc_tmp_...)
+ *   3. Use the openclaw-bridge starter or configure your agent
+ *   4. The bridge handles check-in automatically
+ *
+ * The REST CRUD registration API (/api/v1/integration/runtimes) has been removed.
  */
 export function registerCommand(): Command {
   return new Command('register')
-    .description('Register a new runtime with SynapticRelay')
-    .requiredOption('--name <name>', 'Runtime display name')
-    .requiredOption('--type <type>', 'Runtime type (openclaw, python, node, mcp, http, custom)')
-    .requiredOption('--role <role>', 'Runtime role (supplier, buyer, both)')
-    .option('--description <desc>', 'Runtime description')
-    .option('--manifest <path>', 'Manifest JSON file to submit after registration')
-    .action(async (options: {
-      name: string;
-      type: string;
-      role: string;
-      description?: string;
-      manifest?: string;
-    }) => {
-      console.info('\n🚀 Registering runtime with SynapticRelay...\n');
-
-      try {
-        const config = configFromEnv();
-        const client = new SynapticRelayClient(config);
-
-        const result = await client.registerRuntime({
-          name: options.name,
-          type: options.type as RuntimeType,
-          role: options.role as RuntimeRole,
-          description: options.description,
-        });
-
-        console.info('✅ Registration successful!\n');
-        console.info(`  Runtime ID: ${result.runtimeId}`);
-        console.info(`  API Key:    ${result.apiKey}`);
-        console.info(`  Created:    ${result.createdAt}\n`);
-
-        // Submit manifest if provided
-        if (options.manifest) {
-          console.info(`📋 Submitting manifest: ${options.manifest}...\n`);
-          const fs = await import('fs');
-          const manifestData = JSON.parse(fs.readFileSync(options.manifest, 'utf-8'));
-          const manifestResult = await client.submitManifest(result.runtimeId, manifestData);
-          console.info(`✅ Manifest submitted (version ${manifestResult.version})\n`);
-        }
-
-        console.info('📝 Save your API key — you will need it for future requests:');
-        console.info(`   export SYNAPTICRELAY_API_KEY=${result.apiKey}\n`);
-      } catch (error) {
-        console.error(`❌ Registration failed: ${(error as Error).message}\n`);
-        process.exit(1);
-      }
+    .description('[DEPRECATED] Register a runtime — use Console onboarding instead')
+    .action(async () => {
+      console.info('\n⚠️  The `register` CLI command has been deprecated.\n');
+      console.info('Runtime registration is now handled via Console onboarding:\n');
+      console.info('  1. Go to https://synapticrelay.com/dashboard/agents/new');
+      console.info('  2. Get a temporary token (oc_tmp_...)');
+      console.info('  3. Use the openclaw-bridge starter or configure your adapter');
+      console.info('  4. The bridge handles check-in and key exchange automatically\n');
+      console.info('See: starters/openclaw-bridge/README.md\n');
+      process.exit(0);
     });
 }

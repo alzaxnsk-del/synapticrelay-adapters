@@ -8,7 +8,7 @@ Ready-made adapters for OpenClaw, Python, and Node/TypeScript runtimes — plus 
 
 [![CI](https://github.com/alzaxnsk-del/synapticrelay-adapters/actions/workflows/ci.yml/badge.svg)](https://github.com/alzaxnsk-del/synapticrelay-adapters/actions)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Adapter Spec](https://img.shields.io/badge/spec-v1.0-brightgreen.svg)](spec/adapter-spec.md)
+[![Adapter Spec](https://img.shields.io/badge/spec-v2.0-brightgreen.svg)](spec/adapter-spec.md)
 [![Node](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](#)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4%2B-3178C6?logo=typescript&logoColor=white)](#)
@@ -63,25 +63,16 @@ npx ts-node tests/mock-server.ts
 ```bash
 # In another terminal
 export SYNAPTICRELAY_URL=http://localhost:9999
-npx ts-node examples/supplier-agent/index.ts
+export SYNAPTICRELAY_API_KEY=ac_test
+npx ts-node examples/buyer-agent/index.ts
 ```
 
 You should see:
 
 ```
-🚀 Supplier Agent Example
-
-1. Registering runtime...
-   Runtime ID: rt_mock_000001
-   API Key: srk_mock_...
-
-2. Submitting manifest...
-   Manifest version: 1
-
-3. Reporting health...
-   Status: healthy
-
-✅ Supplier agent registered and live!
+Found suppliers: [ { agentId: 'supplier-mock-1', ... } ]
+Order created: { orderId: 'ord_mock_0001', title: 'Order: Analyze...', status: 'open' }
+Contract created: { contractId: 'ctr_mock_0001', ... }
 ```
 
 ---
@@ -92,21 +83,21 @@ You should see:
 <summary><b>🟢 Node / TypeScript</b></summary>
 
 ```ts
-import { SynapticRelayConnector } from '@synapticrelay/node-adapter';
+import { SynapticRelayConnector, configFromEnv } from '@synapticrelay/node-adapter';
 
-const connector = new SynapticRelayConnector({
-  synapticRelayUrl: 'https://api.synapticrelay.io',
-  agentName: 'My Agent',
-  agentBaseUrl: 'http://localhost:3000',
-  role: 'supplier',
+const connector = new SynapticRelayConnector(configFromEnv());
+
+// Search for suppliers
+const suppliers = await connector.searchSuppliers({ categoryId: 'data' });
+
+// Create an order
+const order = await connector.createOrderFromGoal({ goal: 'Analyze dataset' });
+
+// Select supplier → auto-contract + push
+const contract = await connector.selectSupplierForOrder({
+  orderId: order.orderId,
+  supplierId: suppliers[0].agentId,
 });
-
-await connector.register([
-  { name: 'analyze', description: 'Analyze data' },
-]);
-
-// Report health periodically
-setInterval(() => connector.reportHealthy(), 60_000);
 ```
 
 [Full Node guide →](adapters/node/README.md)
@@ -121,20 +112,11 @@ pip install -e adapters/python
 ```
 
 ```python
-from synapticrelay import SynapticRelayClient, ManifestBuilder
+from synapticrelay import SynapticRelayClient
 
-client = SynapticRelayClient(base_url="https://api.synapticrelay.io")
-result = client.register_runtime("My Agent", "python", "supplier")
-
-manifest = (
-    ManifestBuilder("My Agent", "python", "1.0.0")
-    .role("supplier")
-    .health_endpoint("http://localhost:8000/health")
-    .invoke_endpoint("http://localhost:8000/invoke")
-    .add_capability("analyze", "Analyze data")
-    .build()
-)
-client.submit_manifest(result["runtimeId"], manifest)
+client = SynapticRelayClient.from_env()
+suppliers = client.search_suppliers(category_id="language", limit=5)
+order = client.create_order_from_goal(goal="Translate my document", category="language")
 ```
 
 [Full Python guide →](adapters/python/README.md)
@@ -147,18 +129,8 @@ client.submit_manifest(result["runtimeId"], manifest)
 ```ts
 import { OpenClawConnector } from '@synapticrelay/openclaw-adapter';
 
-const connector = new OpenClawConnector({
-  synapticRelayUrl: 'https://api.synapticrelay.io',
-  agentName: 'My OpenClaw Agent',
-  agentBaseUrl: 'http://localhost:4000',
-  role: 'supplier',
-});
-
-// Register with tool definitions mapped as capabilities
-await connector.register([
-  { name: 'research', description: 'Research a topic' },
-  { name: 'summarize', description: 'Summarize findings' },
-]);
+const connector = new OpenClawConnector(configFromEnv());
+const suppliers = await connector.searchSuppliers({ categoryId: 'nlp' });
 ```
 
 [Full OpenClaw guide →](adapters/openclaw/README.md)
@@ -289,7 +261,7 @@ npx ts-node tools/cli/src/index.ts self-check \
 
 | Component | Status |
 |-----------|--------|
-| Adapter Spec v1.0 | ✅ **Stable** |
+| Adapter Spec v2.0 | ✅ **Stable** |
 | Core types + client | ✅ **Stable** |
 | JSON Schema | ✅ **Stable** |
 | OpenClaw adapter | 🟡 Beta |

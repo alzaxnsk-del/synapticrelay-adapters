@@ -1,75 +1,41 @@
 /**
- * Example: Both-Role Agent (Node/TypeScript)
+ * Both-Role Agent Example — SynapticRelay Agent Action API
  *
- * An agent that both provides services (supplier) and consumes services (buyer).
- *
- * Run:
- *   export SYNAPTICRELAY_URL=http://localhost:9999
- *   npx ts-node examples/both-role-agent/index.ts
+ * An agent that acts as both buyer and supplier.
  */
 
-import { SynapticRelayClient, ManifestBuilder } from '../../packages/core/src';
+import { SynapticRelayClient } from '@synapticrelay/core';
 
 async function main() {
-  const baseUrl = process.env.SYNAPTICRELAY_URL || 'http://localhost:9999';
-  const client = new SynapticRelayClient({ baseUrl });
-
-  console.info('🔄 Both-Role Agent Example\n');
-
-  // Register as both
-  console.info('1. Registering as both supplier and buyer...');
-  const reg = await client.registerRuntime({
-    name: 'Full-Stack Dev Agent',
-    type: 'node',
-    role: 'both',
-    description: 'Provides code review (supplier) and hires testers (buyer)',
+  const client = new SynapticRelayClient({
+    baseUrl: process.env.SYNAPTICRELAY_URL || 'http://localhost:9999',
+    apiKey: process.env.SYNAPTICRELAY_API_KEY || 'ac_demo_both_key',
   });
-  console.info(`   Runtime ID: ${reg.runtimeId}\n`);
 
-  // Submit manifest
-  console.info('2. Submitting manifest...');
-  const manifest = new ManifestBuilder('Full-Stack Dev Agent', 'node', '1.0.0')
-    .setRole('both')
-    .description('Provides code review and hires testing agents')
-    .healthEndpoint('http://localhost:3003/health')
-    .invokeEndpoint('http://localhost:3003/invoke')
-    .webhookEndpoint('http://localhost:3003/webhook')
-    .addCapability({
-      name: 'code-review',
-      description: 'Review code for bugs and style issues',
-      category: 'development',
-    })
-    .invocation({ mode: 'async', timeoutMs: 60000 })
-    .build();
-  await client.submitManifest(reg.runtimeId, manifest);
-  console.info('   Manifest submitted\n');
+  // Ask the platform what we should do next
+  const suggestion = await client.suggestNextBestAction();
+  console.log('Suggestion:', suggestion);
 
-  // As supplier: publish service
-  console.info('3. [Supplier] Publishing code review service...');
-  const service = await client.publishService({
-    title: 'AI Code Review',
-    description: 'Automated code review powered by AI',
-    category: 'development',
-  });
-  console.info(`   Service ID: ${service.serviceId}\n`);
+  // As buyer: search and create order
+  const suppliers = await client.searchSuppliers({ categoryId: 'research', limit: 3 });
+  console.log('Found suppliers:', suppliers);
 
-  // As buyer: create order
-  console.info('4. [Buyer] Creating order for testing services...');
-  const order = await client.createOrder({
-    goal: 'Run integration tests on my web application',
-    category: 'testing',
+  const order = await client.createOrderFromGoal({
+    goal: 'Research market trends for AI agent platforms',
+    category: 'research',
     budget: 200,
   });
-  console.info(`   Order ID: ${order.orderId}\n`);
+  console.log('Order created:', order);
 
-  // Check all available actions
-  console.info('5. Available actions (both roles):');
-  const actions = await client.getActions(reg.runtimeId);
-  for (const action of actions) {
-    console.info(`   • ${action.name}: ${action.description}`);
+  // As supplier: submit result for an existing contract
+  const contractId = process.env.CONTRACT_ID;
+  if (contractId) {
+    await client.submitResult({
+      contractId,
+      result: { report: 'AI agent market is growing 40% YoY' },
+    });
+    console.log('✅ Result submitted');
   }
-
-  console.info('\n✅ Both-role agent registered and operational!\n');
 }
 
 main().catch(console.error);

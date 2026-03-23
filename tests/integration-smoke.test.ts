@@ -1,17 +1,17 @@
 /**
  * Integration Smoke Test
  *
- * Starts the mock server, runs a registration flow against it,
- * and validates the result. This proves the end-to-end path works.
+ * Starts a minimal mock server and runs action flows against it,
+ * proving the end-to-end Agent Action API path works.
  */
 
-import { SynapticRelayClient, ManifestBuilder, validateManifest } from '../packages/core/src';
+import { SynapticRelayClient } from '../packages/core/src';
 
-// Embedded minimal mock server for test isolation
 import * as http from 'http';
 
 function createMockServer(): http.Server {
-  let counter = 0;
+  let orderCounter = 0;
+  let contractCounter = 0;
 
   return http.createServer((req, res) => {
     let body = '';
@@ -22,58 +22,75 @@ function createMockServer(): http.Server {
       const url = req.url || '';
       const method = req.method || 'GET';
 
-      // POST /api/v1/integration/runtimes — register
-      if (method === 'POST' && url === '/api/v1/integration/runtimes') {
-        counter++;
-        res.end(JSON.stringify({
-          runtimeId: `rt_smoke_${String(counter).padStart(6, '0')}`,
-          apiKey: `srk_smoke_${Math.random().toString(36).substring(2)}`,
-          status: 'registered',
-        }));
-        return;
-      }
+      // POST /api/v1/agent/action — unified action endpoint
+      if (method === 'POST' && url === '/api/v1/agent/action') {
+        const parsed = body ? JSON.parse(body) : {};
+        const action = parsed.action;
+        const params = parsed.params || {};
 
-      // POST /api/v1/integration/runtimes/:id/manifest — submit manifest
-      if (method === 'POST' && url.includes('/manifest')) {
-        res.end(JSON.stringify({ version: 1, status: 'accepted' }));
-        return;
-      }
+        switch (action) {
+          case 'search_suppliers':
+            res.end(JSON.stringify([
+              { agentId: 'sup-1', name: 'Test Supplier', score: 0.95, price: 0.05 },
+            ]));
+            return;
 
-      // POST /api/v1/integration/runtimes/:id/health — health report
-      if (method === 'POST' && url.includes('/health')) {
-        res.statusCode = 204;
-        res.end();
-        return;
-      }
+          case 'create_order_from_goal':
+            orderCounter++;
+            res.end(JSON.stringify({
+              orderId: `ord_smoke_${orderCounter}`,
+              title: `Order: ${params.goal}`,
+              status: 'open',
+            }));
+            return;
 
-      // GET /api/v1/integration/runtimes/:id/actions — actions
-      if (method === 'GET' && url.includes('/actions')) {
-        res.end(JSON.stringify([
-          { name: 'publish_service', description: 'Publish a service listing' },
-        ]));
-        return;
-      }
+          case 'select_supplier_for_order':
+            contractCounter++;
+            res.end(JSON.stringify({
+              contractId: `ctr_smoke_${contractCounter}`,
+              orderId: params.orderId,
+              supplierId: params.supplierId,
+              status: 'executing',
+            }));
+            return;
 
-      // GET /api/v1/integration/runtimes/:id/trust — trust
-      if (method === 'GET' && url.includes('/trust')) {
-        res.end(JSON.stringify({
-          verified: false,
-          reputationScore: 0,
-          completedContracts: 0,
-        }));
-        return;
-      }
+          case 'submit_result':
+            res.statusCode = 200;
+            res.end(JSON.stringify({ received: true }));
+            return;
 
-      // GET /api/v1/integration/runtimes/:id — get runtime
-      if (method === 'GET' && url.match(/\/runtimes\/[^/]+$/)) {
-        res.end(JSON.stringify({
-          runtimeId: url.split('/').pop(),
-          name: 'Smoke Test',
-          status: 'active',
-          role: 'supplier',
-          healthStatus: 'healthy',
-        }));
-        return;
+          case 'get_result':
+            res.end(JSON.stringify({
+              resultId: 'res_smoke_1',
+              contractId: params.contractId,
+              data: { summary: 'test' },
+              submittedAt: new Date().toISOString(),
+            }));
+            return;
+
+          case 'suggest_next_best_action':
+            res.end(JSON.stringify({
+              action: 'search_suppliers',
+              reason: 'Start by discovering suppliers',
+            }));
+            return;
+
+          case 'inspect_contract_state':
+            res.end(JSON.stringify({
+              contractId: params.contractId,
+              status: 'executing',
+              supplierId: 'sup-1',
+              buyerId: 'buyer-smoke',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }));
+            return;
+
+          default:
+            res.statusCode = 400;
+            res.end(JSON.stringify({ code: 'UNKNOWN_ACTION', message: `Unknown: ${action}` }));
+            return;
+        }
       }
 
       res.statusCode = 404;
@@ -99,86 +116,52 @@ describe('Integration Smoke Test', () => {
     server.close(done);
   });
 
-  it('should complete full registration flow', async () => {
-    const client = new SynapticRelayClient({ baseUrl: `http://localhost:${port}` });
-
-    // 1. Register
-    const reg = await client.registerRuntime({
-      name: 'Smoke Test Agent',
-      type: 'node',
-      role: 'supplier',
+  it('should complete full buyer flow via Agent Action API', async () => {
+    const client = new SynapticRelayClient({
+      baseUrl: `http://localhost:${port}`,
+      apiKey: 'ac_smoke_test',
     });
 
-    expect(reg.runtimeId).toMatch(/^rt_smoke_/);
-    expect(reg.apiKey).toMatch(/^srk_smoke_/);
+    // 1. Search suppliers
+    const suppliers = await client.searchSuppliers({ categoryId: 'test' });
+    expect(suppliers.length).toBeGreaterThan(0);
+    expect(suppliers[0].agentId).toBe('sup-1');
 
-    // 2. Build and validate manifest
-    const manifest = new ManifestBuilder('Smoke Test Agent', 'node', '1.0.0')
-      .setRole('supplier')
-      .healthEndpoint('http://localhost:3000/health')
-      .invokeEndpoint('http://localhost:3000/invoke')
-      .addCapability({ name: 'test-cap', description: 'Test capability' })
-      .build();
+    // 2. Create order from goal
+    const order = await client.createOrderFromGoal({ goal: 'Smoke test task', category: 'test' });
+    expect(order.orderId).toMatch(/^ord_smoke_/);
 
-    const validationResult = validateManifest(manifest);
-    expect(validationResult.valid).toBe(true);
-
-    // 3. Submit manifest
-    const manifestResult = await client.submitManifest(reg.runtimeId, manifest);
-    expect(manifestResult.version).toBe(1);
-
-    // 4. Report health
-    await client.reportHealth(reg.runtimeId, {
-      status: 'healthy',
-      version: '1.0.0',
+    // 3. Select supplier
+    const contract = await client.selectSupplierForOrder({
+      orderId: order.orderId,
+      supplierId: suppliers[0].agentId,
     });
+    expect(contract.contractId).toMatch(/^ctr_smoke_/);
 
-    // 5. Get actions
-    const actions = await client.getActions(reg.runtimeId);
-    expect(actions.length).toBeGreaterThan(0);
+    // 4. Inspect contract
+    const state = await client.inspectContractState({ contractId: contract.contractId });
+    expect(state.status).toBe('executing');
 
-    // 6. Get trust
-    const trust = await client.getTrust(reg.runtimeId);
-    expect(trust).toHaveProperty('verified');
-    expect(trust).toHaveProperty('reputationScore');
+    // 5. Get suggestion
+    const suggestion = await client.suggestNextBestAction();
+    expect(suggestion.action).toBeDefined();
   });
 
-  it('should complete buyer flow', async () => {
-    const client = new SynapticRelayClient({ baseUrl: `http://localhost:${port}` });
-
-    // Register as buyer
-    const reg = await client.registerRuntime({
-      name: 'Buyer Smoke Test',
-      type: 'node',
-      role: 'buyer',
+  it('should complete supplier result submission', async () => {
+    const client = new SynapticRelayClient({
+      baseUrl: `http://localhost:${port}`,
+      apiKey: 'ac_smoke_supplier',
     });
 
-    expect(reg.runtimeId).toBeDefined();
+    // Submit result
+    await client.submitResult({
+      contractId: 'ctr_smoke_1',
+      result: { answer: '42' },
+    });
 
-    // Build buyer manifest (no capabilities needed)
-    const manifest = new ManifestBuilder('Buyer Smoke Test', 'node', '1.0.0')
-      .setRole('buyer')
-      .healthEndpoint('http://localhost:3002/health')
-      .build();
-
-    const validationResult = validateManifest(manifest);
-    expect(validationResult.valid).toBe(true);
-  });
-
-  it('should validate manifest before submission catches errors', () => {
-    // Supplier without capabilities should fail semantic validation.
-    // We construct the manifest as a plain object since ManifestBuilder.build() throws.
-    const badManifest = {
-      specVersion: '1.0' as const,
-      runtime: { name: 'Bad Agent', type: 'node' as const, version: '1.0.0' },
-      role: 'supplier' as const,
-      endpoints: { health: 'http://localhost:3000/health' },
-      // Missing: capabilities (required for supplier)
-      // Missing: endpoints.invoke (required for supplier)
-    };
-
-    const result = validateManifest(badManifest as any);
-    expect(result.valid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
+    // Get result
+    const result = await client.getResult({ contractId: 'ctr_smoke_1' });
+    expect(result.contractId).toBe('ctr_smoke_1');
+    expect(result.data).toHaveProperty('summary');
   });
 });

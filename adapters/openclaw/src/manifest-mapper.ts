@@ -1,6 +1,5 @@
-import type { RuntimeManifest, Capability, RuntimeRole } from '@synapticrelay/core';
+import type { RuntimeManifest, Capability } from '@synapticrelay/core';
 import { ManifestBuilder } from '@synapticrelay/core';
-import type { OpenClawConfig } from './config';
 
 /**
  * OpenClaw tool definition (subset of the OpenClaw tool format).
@@ -34,50 +33,44 @@ export function mapToolsToCapabilities(tools: OpenClawTool[]): Capability[] {
 }
 
 /**
- * Generate a SynapticRelay manifest from OpenClaw agent metadata.
+ * Generate a SynapticRelay manifest from OpenClaw tools.
  *
- * @param config — OpenClaw adapter configuration
- * @param tools — OpenClaw tool definitions to map as capabilities
- * @returns A valid RuntimeManifest
+ * Since OpenClawConfig is now minimal (just URL + key),
+ * you provide agent metadata directly to this function.
  */
 export function generateManifest(
-  config: OpenClawConfig,
+  agentMeta: {
+    name: string;
+    version?: string;
+    role?: 'supplier' | 'buyer' | 'both';
+    baseUrl?: string;
+    description?: string;
+  },
   tools: OpenClawTool[] = [],
 ): RuntimeManifest {
-  const builder = new ManifestBuilder(config.agentName, 'openclaw', config.version || '1.0.0');
+  const builder = new ManifestBuilder(agentMeta.name, 'openclaw', agentMeta.version || '1.0.0');
+  const role = agentMeta.role || 'supplier';
 
   builder
-    .setRole(config.role)
-    .healthEndpoint(`${config.agentBaseUrl}/health`);
+    .setRole(role)
+    .healthEndpoint(`${agentMeta.baseUrl || 'http://localhost:3000'}/health`);
 
-  if (config.description) {
-    builder.description(config.description);
+  if (agentMeta.description) {
+    builder.description(agentMeta.description);
   }
 
-  // Supplier / both roles need invoke endpoint and capabilities
-  if (config.role === 'supplier' || config.role === 'both') {
-    builder.invokeEndpoint(`${config.agentBaseUrl}/invoke`);
-
+  if (role === 'supplier' || role === 'both') {
+    builder.invokeEndpoint(`${agentMeta.baseUrl || 'http://localhost:3000'}/invoke`);
     const capabilities = mapToolsToCapabilities(tools);
     for (const cap of capabilities) {
       builder.addCapability(cap);
     }
   }
 
-  // Buyer / both roles may want webhook for callbacks
-  if (config.role === 'buyer' || config.role === 'both') {
-    builder.webhookEndpoint(`${config.agentBaseUrl}/webhook`);
+  if (role === 'buyer' || role === 'both') {
+    builder.webhookEndpoint(`${agentMeta.baseUrl || 'http://localhost:3000'}/webhook`);
   }
 
-  if (config.invocationMode) {
-    builder.invocation({ mode: config.invocationMode });
-  }
-
-  if (config.mcpEnabled) {
-    builder.meta({ mcpEnabled: true, mcpServerUrl: config.mcpServerUrl });
-  }
-
-  // Build without validation to allow partial manifests during development
   return builder.buildUnchecked();
 }
 
@@ -85,9 +78,9 @@ export function generateManifest(
  * Generate a manifest JSON string for easy file output.
  */
 export function generateManifestJson(
-  config: OpenClawConfig,
+  agentMeta: Parameters<typeof generateManifest>[0],
   tools: OpenClawTool[] = [],
 ): string {
-  const manifest = generateManifest(config, tools);
+  const manifest = generateManifest(agentMeta, tools);
   return JSON.stringify(manifest, null, 2);
 }

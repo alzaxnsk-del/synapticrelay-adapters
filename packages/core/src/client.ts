@@ -1,202 +1,117 @@
 import type {
   SynapticRelayConfig,
-  RegisterRuntimeRequest,
-  RegisterRuntimeResponse,
-  RuntimeDetails,
-  RuntimeManifest,
-  HealthReport,
-  RuntimeAction,
-  TrustState,
-  HealthStatus,
-  RuntimeRole,
+  AgentActionName,
+  MatchCandidate,
+  Order,
+  Contract,
+  ContractState,
+  ActionResult,
+  Suggestion,
 } from './types';
 import { SynapticRelayError, AuthenticationError } from './errors';
 
 /**
- * HTTP client for the SynapticRelay Integration Surface API.
+ * SynapticRelay Agent API Client.
  *
- * Covers all endpoints under /api/v1/integration/* and relevant
- * marketplace endpoints under /api/v1/market/*.
+ * All agent actions go through a single endpoint:
+ *   POST /api/v1/agent/action
+ *
+ * Auth: X-API-Key header with a permanent key (ac_...).
+ * The agentId is automatically resolved from the API key on the server side.
  */
 export class SynapticRelayClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
-  private apiKey?: string;
-  private jwtToken?: string;
+  private apiKey: string;
 
   constructor(config: SynapticRelayConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     this.apiKey = config.apiKey;
-    this.jwtToken = config.jwtToken;
     this.timeoutMs = config.timeoutMs ?? 30_000;
   }
 
-  // ─── Runtime Registration ───────────────────────────────────────
-
-  async registerRuntime(data: RegisterRuntimeRequest): Promise<RegisterRuntimeResponse> {
-    const res = await this.request<RegisterRuntimeResponse>(
-      'POST',
-      '/api/v1/integration/runtimes',
-      data,
-    );
-    // Store the API key from registration
-    if (res.apiKey) {
-      this.apiKey = res.apiKey;
-    }
-    return res;
+  /** Update the API key at runtime (e.g. after Zero-Intervention upgrade). */
+  setApiKey(key: string): void {
+    this.apiKey = key;
   }
 
-  async getRuntime(runtimeId: string): Promise<RuntimeDetails> {
-    return this.request<RuntimeDetails>('GET', `/api/v1/integration/runtimes/${runtimeId}`);
-  }
+  // ─── Universal Action Dispatcher ──────────────────────────────────
 
-  async listRuntimes(): Promise<RuntimeDetails[]> {
-    return this.request<RuntimeDetails[]>('GET', '/api/v1/integration/runtimes');
-  }
-
-  async updateRuntime(
-    runtimeId: string,
-    data: Partial<Pick<RegisterRuntimeRequest, 'name' | 'description'>>,
-  ): Promise<RuntimeDetails> {
-    return this.request<RuntimeDetails>(
-      'PATCH',
-      `/api/v1/integration/runtimes/${runtimeId}`,
-      data,
-    );
-  }
-
-  async deleteRuntime(runtimeId: string): Promise<void> {
-    await this.request<void>('DELETE', `/api/v1/integration/runtimes/${runtimeId}`);
-  }
-
-  async changeRole(runtimeId: string, role: RuntimeRole): Promise<RuntimeDetails> {
-    return this.request<RuntimeDetails>(
-      'POST',
-      `/api/v1/integration/runtimes/${runtimeId}/role`,
-      { role },
-    );
-  }
-
-  // ─── Manifest ───────────────────────────────────────────────────
-
-  async submitManifest(runtimeId: string, manifest: RuntimeManifest): Promise<{ version: number }> {
-    return this.request<{ version: number }>(
-      'POST',
-      `/api/v1/integration/runtimes/${runtimeId}/manifest`,
-      manifest,
-    );
-  }
-
-  async getManifest(runtimeId: string): Promise<RuntimeManifest & { version: number }> {
-    return this.request<RuntimeManifest & { version: number }>(
-      'GET',
-      `/api/v1/integration/runtimes/${runtimeId}/manifest`,
-    );
-  }
-
-  // ─── Health ─────────────────────────────────────────────────────
-
-  async reportHealth(runtimeId: string, report: HealthReport): Promise<void> {
-    await this.request<void>(
-      'POST',
-      `/api/v1/integration/runtimes/${runtimeId}/health`,
-      report,
-    );
-  }
-
-  async getHealth(runtimeId: string): Promise<{ healthStatus: HealthStatus; lastCheckAt?: string }> {
-    return this.request('GET', `/api/v1/integration/runtimes/${runtimeId}/health`);
-  }
-
-  // ─── Actions & Trust ────────────────────────────────────────────
-
-  async getActions(runtimeId: string): Promise<RuntimeAction[]> {
-    return this.request<RuntimeAction[]>(
-      'GET',
-      `/api/v1/integration/runtimes/${runtimeId}/actions`,
-    );
-  }
-
-  async getTrust(runtimeId: string): Promise<TrustState> {
-    return this.request<TrustState>('GET', `/api/v1/integration/runtimes/${runtimeId}/trust`);
-  }
-
-  // ─── Marketplace Actions ────────────────────────────────────────
-
-  async publishService(data: {
-    title: string;
-    description: string;
-    category: string;
-    price?: number;
-    capabilities?: string[];
-  }): Promise<{ serviceId: string }> {
-    return this.request<{ serviceId: string }>('POST', '/api/v1/market/services', data);
-  }
-
-  async createOrder(data: {
-    goal: string;
-    category?: string;
-    budget?: number;
-    requirements?: Record<string, unknown>;
-  }): Promise<{ orderId: string }> {
-    return this.request<{ orderId: string }>('POST', '/api/v1/market/orders', data);
-  }
-
-  async searchSuppliers(data: {
-    agentId: string;
-    categoryId?: string;
-    maxPrice?: number;
-    limit?: number;
-  }): Promise<Array<Record<string, unknown>>> {
-    return this.request<Array<Record<string, unknown>>>('POST', '/api/v1/agent/action', {
-      action: 'search_suppliers',
-      params: data,
+  /**
+   * Send any action to the SynapticRelay Agent API.
+   * All platform actions go through POST /api/v1/agent/action.
+   */
+  async action<T = unknown>(actionName: AgentActionName, params: Record<string, unknown> = {}): Promise<T> {
+    return this.request<T>('POST', '/api/v1/agent/action', {
+      action: actionName,
+      params,
     });
   }
 
-  async getShortlist(orderId: string): Promise<Array<{ agentId: string; score: number; name: string }>> {
-    return this.request('GET', `/api/v1/market/orders/${orderId}/shortlist`);
+  // ─── Typed Convenience Methods ────────────────────────────────────
+
+  /** Search for suppliers on the marketplace. */
+  async searchSuppliers(params: {
+    categoryId?: string;
+    maxPrice?: number;
+    limit?: number;
+  } = {}): Promise<MatchCandidate[]> {
+    return this.action<MatchCandidate[]>('search_suppliers', params);
   }
 
-  async selectSupplier(orderId: string, agentId: string): Promise<{ contractId: string }> {
-    return this.request<{ contractId: string }>(
-      'POST',
-      `/api/v1/market/orders/${orderId}/shortlist`,
-      { agentId },
-    );
+  /** Create an order from a goal description. Title is auto-generated by the platform. */
+  async createOrderFromGoal(params: {
+    goal: string;
+    category?: string;
+    budget?: number;
+  }): Promise<Order> {
+    return this.action<Order>('create_order_from_goal', params);
   }
 
-  async openContract(data: {
+  /** Select a supplier for an order. Auto-creates contract and pushes to supplier. */
+  async selectSupplierForOrder(params: {
     orderId: string;
     supplierId: string;
-    terms?: Record<string, unknown>;
-  }): Promise<{ contractId: string }> {
-    return this.request<{ contractId: string }>('POST', '/api/v1/market/contracts', data);
+  }): Promise<Contract> {
+    return this.action<Contract>('select_supplier_for_order', params);
   }
 
-  async getContracts(runtimeId: string): Promise<Array<Record<string, unknown>>> {
-    return this.request('GET', `/api/v1/integration/runtimes/${runtimeId}/contracts`);
+  /** Supplier submits result for a contract. Pushes notification to buyer. */
+  async submitResult(params: {
+    contractId: string;
+    result: Record<string, unknown>;
+  }): Promise<void> {
+    await this.action<void>('submit_result', params);
   }
 
-  async getReceipt(contractId: string): Promise<Record<string, unknown>> {
-    return this.request('GET', `/api/v1/market/contracts/${contractId}/receipt`);
+  /** Buyer retrieves the result for a contract. */
+  async getResult(params: {
+    contractId: string;
+  }): Promise<ActionResult> {
+    return this.action<ActionResult>('get_result', params);
   }
 
-  // ─── HTTP Layer ─────────────────────────────────────────────────
+  /** Get the platform's recommendation for the next best action. */
+  async suggestNextBestAction(): Promise<Suggestion> {
+    return this.action<Suggestion>('suggest_next_best_action');
+  }
+
+  /** Inspect the current state of a contract. */
+  async inspectContractState(params: {
+    contractId: string;
+  }): Promise<ContractState> {
+    return this.action<ContractState>('inspect_contract_state', params);
+  }
+
+  // ─── HTTP Layer ───────────────────────────────────────────────────
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-API-Key': this.apiKey,
     };
-
-    if (this.apiKey) {
-      headers['X-API-Key'] = this.apiKey;
-    }
-    if (this.jwtToken) {
-      headers['Authorization'] = `Bearer ${this.jwtToken}`;
-    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);

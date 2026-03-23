@@ -1,82 +1,40 @@
 /**
- * Example: Buyer Agent (Node/TypeScript)
+ * Buyer Agent Example — SynapticRelay Agent Action API
  *
- * A complete buyer agent that:
- * 1. Registers as buyer with SynapticRelay
- * 2. Creates an order
- * 3. Reviews shortlist
- * 4. Selects supplier and opens contract
- * 5. Inspects receipt
- *
- * Run:
- *   export SYNAPTICRELAY_URL=http://localhost:9999
- *   npx ts-node examples/buyer-agent/index.ts
+ * Demonstrates the full buyer flow:
+ *   search → create order → select supplier → get result
  */
 
-import { SynapticRelayClient, ManifestBuilder } from '../../packages/core/src';
+import { SynapticRelayClient } from '@synapticrelay/core';
 
 async function main() {
-  const baseUrl = process.env.SYNAPTICRELAY_URL || 'http://localhost:9999';
-  const client = new SynapticRelayClient({ baseUrl });
-
-  console.info('🛒 Buyer Agent Example\n');
-
-  // 1. Register as buyer
-  console.info('1. Registering as buyer...');
-  const reg = await client.registerRuntime({
-    name: 'Example Buyer Agent',
-    type: 'node',
-    role: 'buyer',
-    description: 'Demonstrates buyer registration and ordering flow',
+  const client = new SynapticRelayClient({
+    baseUrl: process.env.SYNAPTICRELAY_URL || 'http://localhost:9999',
+    apiKey: process.env.SYNAPTICRELAY_API_KEY || 'ac_demo_buyer_key',
   });
-  console.info(`   Runtime ID: ${reg.runtimeId}\n`);
 
-  // 2. Submit buyer manifest
-  console.info('2. Submitting manifest...');
-  const manifest = new ManifestBuilder('Example Buyer Agent', 'node', '1.0.0')
-    .setRole('buyer')
-    .healthEndpoint('http://localhost:3002/health')
-    .webhookEndpoint('http://localhost:3002/webhook')
-    .build();
-  await client.submitManifest(reg.runtimeId, manifest);
-  console.info('   Manifest submitted\n');
+  // 1. Search for suppliers
+  const suppliers = await client.searchSuppliers({ categoryId: 'data', limit: 5 });
+  console.log('Found suppliers:', suppliers);
 
-  // 3. Create an order
-  console.info('3. Creating order...');
-  const order = await client.createOrder({
-    goal: 'Summarize this 50-page research paper',
-    category: 'nlp',
+  // 2. Create an order from a goal
+  const order = await client.createOrderFromGoal({
+    goal: 'Analyze my Q4 sales dataset and produce a summary report',
+    category: 'data',
     budget: 100,
   });
-  console.info(`   Order ID: ${order.orderId}\n`);
+  console.log('Order created:', order);
 
-  // 4. Review shortlist
-  console.info('4. Reviewing shortlist...');
-  const shortlist = await client.getShortlist(order.orderId);
-  for (const supplier of shortlist) {
-    console.info(`   • ${supplier.name} (score: ${supplier.score})`);
-  }
+  // 3. Select the best supplier — auto-creates contract + pushes to supplier
+  const contract = await client.selectSupplierForOrder({
+    orderId: order.orderId,
+    supplierId: suppliers[0].agentId,
+  });
+  console.log('Contract created:', contract);
 
-  // 5. Select supplier
-  if (shortlist.length > 0) {
-    console.info(`\n5. Selecting supplier: ${shortlist[0].name}...`);
-    await client.selectSupplier(order.orderId, shortlist[0].agentId);
-
-    // 6. Open contract
-    console.info('6. Opening contract...');
-    const contract = await client.openContract({
-      orderId: order.orderId,
-      supplierId: shortlist[0].agentId,
-    });
-    console.info(`   Contract ID: ${contract.contractId}\n`);
-
-    // 7. Inspect receipt
-    console.info('7. Checking receipt...');
-    const receipt = await client.getReceipt(contract.contractId);
-    console.info(`   Status: ${receipt.status}\n`);
-  }
-
-  console.info('✅ Buyer agent flow complete!\n');
+  // 4. Later, retrieve the result (after supplier submits)
+  // const result = await client.getResult({ contractId: contract.contractId });
+  // console.log('Result:', result);
 }
 
 main().catch(console.error);

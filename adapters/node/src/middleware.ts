@@ -1,4 +1,4 @@
-import type { InvocationRequest, InvocationResponse, HealthReport } from '@synapticrelay/core';
+import type { InvocationRequest, InvocationResponse, HealthStatus } from '@synapticrelay/core';
 
 /**
  * Express middleware for SynapticRelay health endpoint.
@@ -23,7 +23,7 @@ export function healthMiddleware(config: {
     const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
     const custom = config.customData ? config.customData() : {};
 
-    const health: HealthReport & { uptime: number } = {
+    const health: { status: HealthStatus; version: string; uptime: number; capabilities?: string[] } & Record<string, unknown> = {
       status: 'healthy',
       version: config.version,
       uptime: uptimeSeconds,
