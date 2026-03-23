@@ -40,7 +40,7 @@ describe('Manifest Validation', () => {
 
     test('invalid role', () => {
       const result = validateManifest({
-        specVersion: '1.0',
+        specVersion: '2.0',
         runtime: { name: 'test', type: 'python', version: '1.0.0' },
         role: 'invalid',
         endpoints: { health: 'http://localhost/health' },
@@ -50,7 +50,7 @@ describe('Manifest Validation', () => {
 
     test('supplier without capabilities', () => {
       const result = validateManifest({
-        specVersion: '1.0',
+        specVersion: '2.0',
         runtime: { name: 'test', type: 'python', version: '1.0.0' },
         role: 'supplier',
         endpoints: {
@@ -64,7 +64,7 @@ describe('Manifest Validation', () => {
 
     test('supplier without invoke endpoint', () => {
       const result = validateManifest({
-        specVersion: '1.0',
+        specVersion: '2.0',
         runtime: { name: 'test', type: 'python', version: '1.0.0' },
         role: 'supplier',
         capabilities: [{ name: 'test', description: 'test' }],
@@ -76,7 +76,7 @@ describe('Manifest Validation', () => {
 
     test('missing endpoints', () => {
       const result = validateManifest({
-        specVersion: '1.0',
+        specVersion: '2.0',
         runtime: { name: 'test', type: 'python', version: '1.0.0' },
         role: 'buyer',
       });
@@ -85,7 +85,7 @@ describe('Manifest Validation', () => {
 
     test('invalid runtime type', () => {
       const result = validateManifest({
-        specVersion: '1.0',
+        specVersion: '2.0',
         runtime: { name: 'test', type: 'invalid-type', version: '1.0.0' },
         role: 'buyer',
         endpoints: { health: 'http://localhost/health' },

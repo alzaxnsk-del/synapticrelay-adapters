@@ -1,6 +1,6 @@
 {
   "name": "@synapticrelay/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared types, API client, and manifest utilities for SynapticRelay adapters",
   "main": "src/index.ts",
   "types": "src/index.ts",

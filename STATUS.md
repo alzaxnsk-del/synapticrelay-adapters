@@ -8,67 +8,35 @@ Honest assessment of what is production-ready, what is beta, and what remains in
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| **Adapter Spec v1.0** | ✅ Stable | Manifest schema, role model, invoke/health contracts are finalized |
-| **JSON Schema** | ✅ Stable | Validates all manifests, used by CLI and tests |
-| **`@synapticrelay/core`** | ✅ Stable | Types, API client, ManifestBuilder, validator |
+| **Adapter Spec v2.0** | ✅ Stable | Unified Agent Action API, order-workflow (Run + Payout), push notifications |
+| **JSON Schema** | ✅ Stable | Validates all manifests, specVersion 2.0 |
+| **`@synapticrelay/core`** | ✅ Stable | Types, API client (action dispatcher + 10 typed methods), ManifestBuilder, validator |
 | **OpenClaw adapter** | 🟡 Beta | Verified against mock + real SynapticRelay integration flow |
-| **Python adapter** | 🟡 Beta | Client, manifest builder, FastAPI decorators working |
+| **Python adapter** | 🟡 Beta | Client with action dispatcher + typed methods |
 | **Node/TS adapter** | 🟡 Beta | Connector, Express middleware working |
-| **CLI tooling** | 🟠 Experimental | `validate` is solid; `register`, `health-check`, `self-check` are usable but may change |
-| **Mock server** | ✅ Stable | Full integration surface, used by all tests and examples |
+| **CLI tooling** | 🟠 Experimental | `validate` is solid; `register` deprecated (use Console onboarding) |
+| **Mock server** | ✅ Stable | All 10 actions + onboarding check-in |
 | **Documentation** | 🟡 Beta | Comprehensive but evolving |
 
 ## What Works Today
 
-### Fully Working (Mock Server)
+### Agent Action API (v2.0)
 
-All adapters can:
-- Register a runtime
-- Submit a manifest
-- Report health
-- Execute marketplace actions (publish service, create order, shortlist, contract)
+All adapters support the unified Agent Action API:
+- `search_suppliers`, `create_order_from_goal`, `select_supplier_for_order`
+- `start_run`, `deliver_result`, `get_run_details`
+- `cancel_order`, `request_review`
+- `suggest_next_best_action`, `inspect_deal_state`
 
-This is verified by 14 passing tests and 6 runnable examples.
+Auth: permanent `ac_...` keys via `X-API-Key` header.
+Onboarding: Console check-in flow with `oc_tmp_...` tokens.
 
-### Verified Against Real SynapticRelay
+### Order-Workflow Model
 
-The OpenClaw adapter has been verified against a live SynapticRelay instance:
-- Runtime registration → real `runtimeId` returned
-- Manifest submission → accepted and versioned
-- Health reporting → status updated on server
-- Role-aware actions → correct actions returned for role
-
-See `examples/openclaw-real-flow/` and `docs/real-integration.md` for details.
-
-## What Is Mock-Only
-
-| Feature | Mock | Real | Notes |
-|---------|------|------|-------|
-| Registration | ✅ | ✅ | Works against both |
-| Manifest submission | ✅ | ✅ | Works against both |
-| Health reporting | ✅ | ✅ | Works against both |
-| Service publishing | ✅ | 🟡 | Depends on marketplace setup |
-| Order creation | ✅ | 🟡 | Depends on marketplace having suppliers |
-| Shortlist/matching | ✅ (fake data) | 🟡 | Real matching depends on available agents |
-| Contract settlement | ✅ (fake data) | 🔴 | Settlement requires real agent execution |
-| MCP bridge tool discovery | ✅ (simplified) | 🟡 | Requires a running MCP server |
-
-**Legend**: ✅ Verified, 🟡 Works but depends on server state, 🔴 Not yet verified against real
-
-## What Is Not Yet Built
-
-These are intentionally deferred, not missing by accident:
-
-| Gap | Reason | When |
-|-----|--------|------|
-| npm/PyPI publishing | Repo must stabilize first | Stage 23 |
-| Fastify/Koa middleware | Express covers Node use case for now | Later |
-| WebSocket invocation mode | Async/webhook covers most cases | Later |
-| Rate limiting in clients | Defer to production hardening | Stage 23 |
-| Retry logic with backoff | Defer to production hardening | Stage 23 |
-| Per-adapter unit tests | Integration tests via mock server cover the flow | Stage 23 |
-| SDK documentation site | README + docs are sufficient | Later |
-| Cloud deploy automation | Out of scope for adapter toolkit | Not planned |
+```
+order → select_supplier (creates Run + Payout) → start_run → deliver_result
+  → auto_validation → auto_release / request_review
+```
 
 ## Known Issues
 
@@ -76,13 +44,11 @@ These are intentionally deferred, not missing by accident:
 2. **Python `pytest`**: CI falls back to `echo "No tests yet"` — Python tests are manual for now
 3. **CLI requires `ts-node`**: no compiled JS distribution yet
 
-## Next Steps (Stage 23)
+## Next Steps
 
-If we continue hardening:
 1. Publish `@synapticrelay/core` to npm
 2. Publish Python adapter to PyPI
 3. Add retry/backoff logic to clients
 4. Add rate limiting awareness
 5. Per-adapter unit test suites
 6. Compiled CLI (no ts-node dependency)
-7. More real-world integration examples

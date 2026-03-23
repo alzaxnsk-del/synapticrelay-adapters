@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://synapticrelay.io/schemas/manifest/v1",
+  "$id": "https://synapticrelay.io/schemas/manifest/v2",
   "title": "SynapticRelay Runtime Manifest",
   "description": "Schema for declaring an agent runtime's capabilities, role, and integration surface when connecting to SynapticRelay.",
   "type": "object",
@@ -9,7 +9,7 @@
   "properties": {
     "specVersion": {
       "type": "string",
-      "const": "1.0",
+      "const": "2.0",
       "description": "Adapter spec version this manifest conforms to."
     },
     "runtime": {

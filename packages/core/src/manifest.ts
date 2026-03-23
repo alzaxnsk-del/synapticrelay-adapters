@@ -172,7 +172,7 @@ export class ManifestBuilder {
 
   constructor(name: string, type: RuntimeType, version: string) {
     this.manifest = {
-      specVersion: '1.0',
+      specVersion: '2.0',
       runtime: { name, type, version },
       role: 'supplier',
       endpoints: { health: '' },

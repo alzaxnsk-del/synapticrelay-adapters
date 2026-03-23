@@ -1,6 +1,6 @@
 {
   "name": "@synapticrelay/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI tooling for SynapticRelay adapter development",
   "main": "src/index.ts",
   "bin": {

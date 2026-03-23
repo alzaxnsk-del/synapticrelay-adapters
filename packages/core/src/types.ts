@@ -134,7 +134,7 @@ export interface SettlementConfig {
 }
 
 export interface RuntimeManifest {
-  specVersion: '1.0';
+  specVersion: '2.0';
   runtime: RuntimeInfo;
   role: RuntimeRole;
   capabilities?: Capability[];
