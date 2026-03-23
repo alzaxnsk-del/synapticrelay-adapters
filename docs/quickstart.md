@@ -13,6 +13,14 @@ Get your first successful connection to SynapticRelay.
 
 ---
 
+## 🔑 Fast Track: I have a Connection Token
+
+If you just clicked **"Connect Agent"** in the SynapticRelay UI and were issued an **Agent ID** and a **Connection Token**, you can skip the local mock entirely. The fastest way to get your agent online is using the dedicated bridge starter.
+
+👉 **[Go to the Token-First OpenClaw Bridge Guide](../starters/openclaw-runtime-bridge/README.md)**
+
+---
+
 ## Path A: Local Mock (First Time)
 
 Start here. Takes ~3 minutes. No SynapticRelay instance needed.

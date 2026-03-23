@@ -3,12 +3,15 @@ import request from 'supertest';
 import * as client from '../src/openclaw-client';
 
 jest.mock('../src/config', () => {
+  let mockRole: 'supplier' | 'buyer' | 'both' = 'supplier'; // Define mockRole here
   const sharedState = {
     port: 3000,
     agentBaseUrl: 'http://bridge-public',
-    agentName: 'Test Bridge',
-    role: 'supplier' as 'supplier' | 'buyer' | 'both',
+    agentId: 'rt_123',
+    get role() { return mockRole; },
+    set role(newRole: 'supplier' | 'buyer' | 'both') { mockRole = newRole; }, // Add setter for role
     synapticRelayUrl: 'http://sr',
+    connectToken: 'token_123',
     targetOpenClawUrl: 'http://target-internal',
     targetTimeoutMs: 5000,
   };
@@ -34,6 +37,7 @@ describe('Bridge Server API', () => {
       const res = await request(app).get('/health');
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('healthy');
+      expect(res.body.agentId).toBe('rt_123');
     });
   });
 

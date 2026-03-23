@@ -23,14 +23,14 @@ app.get('/health', async (req, res) => {
   if (targetReachable) {
     res.json({
       status: 'healthy',
-      agent: config.agentName,
+      agentId: config.agentId,
       target: 'reachable',
     });
   } else {
     // If the target is unreachable, the bridge is "degraded"
     res.status(503).json({
       status: 'degraded',
-      agent: config.agentName,
+      agentId: config.agentId,
       error: `Configured target OpenClaw agent at ${config.targetOpenClawUrl} is unreachable.`,
     });
   }
@@ -98,7 +98,7 @@ app.post('/webhook', async (req, res) => {
 export function startServer() {
   app.listen(config.port, () => {
     console.log(`\n🔌 OpenClaw Runtime Bridge started on port ${config.port}`);
-    console.log(`📡 Agent Name: ${config.agentName}`);
+    console.log(`📡 Agent ID:   ${config.agentId}`);
     console.log(`🎭 Role:       ${config.role}`);
     console.log(`🌐 Public URL: ${config.agentBaseUrl}`);
     console.log(`🎯 Target URL: ${config.targetOpenClawUrl}`);

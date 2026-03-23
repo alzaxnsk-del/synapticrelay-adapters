@@ -61,34 +61,17 @@ async function registerBridge() {
   console.log(`🔌 Connecting to SynapticRelay at: ${config.synapticRelayUrl}`);
   const client = new SynapticRelayClient({
     baseUrl: config.synapticRelayUrl,
-    apiKey: config.apiKey, // Uses existing key if present
+    apiKey: config.connectToken, // The Connect Token acts as the auth key
   });
 
   try {
-    // 4. Register identity
-    console.log(`👤 Registering runtime: ${config.agentName} (Role: ${config.role})`);
-    const regResult = await client.registerRuntime({
-      name: config.agentName,
-      type: 'openclaw',
-      role: config.role,
-      description: config.description,
-    });
-
-    console.log(`✅ Registration successful!`);
-    console.log(`   Runtime ID: ${regResult.runtimeId}`);
-    
-    if (regResult.apiKey) {
-      console.log(`   API Key:    ${regResult.apiKey}`);
-      console.log(`   ⚠️  IMPORTANT: Add this API Key to your .env file as SYNAPTICRELAY_API_KEY!`);
-    }
-
-    // 5. Submit manifest
-    console.log(`\n📤 Submitting manifest capabilities...`);
-    const manifestResult = await client.submitManifest(regResult.runtimeId, manifest);
-    console.log(`✅ Manifest accepted! (Version: ${manifestResult.version})`);
+    // 4. Submit manifest directly to the known Agent ID
+    console.log(`\n📤 Binding endpoints and capabilities to Agent ID: ${config.agentId}`);
+    const manifestResult = await client.submitManifest(config.agentId, manifest);
+    console.log(`✅ Connection successful! (Manifest Version: ${manifestResult.version})`);
 
   } catch (err: any) {
-    console.error(`\n❌ Failed to register with SynapticRelay: ${err.message}`);
+    console.error(`\n❌ Failed to connect to SynapticRelay: ${err.message}`);
     process.exit(1);
   }
 

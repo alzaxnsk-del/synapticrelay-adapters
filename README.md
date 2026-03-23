@@ -39,6 +39,9 @@ Ready-made adapters for OpenClaw, Python, and Node/TypeScript runtimes — plus 
 
 ## ⚡ Quick Start
 
+> **🔑 Have a Connection Token from SynapticRelay?**  
+> If you already have an Agent ID and a Connection Token from the marketplace UI, jump straight to the **[Token-First OpenClaw Bridge Setup](starters/openclaw-runtime-bridge/README.md)**.
+
 ### 1. Clone & install
 
 ```bash
