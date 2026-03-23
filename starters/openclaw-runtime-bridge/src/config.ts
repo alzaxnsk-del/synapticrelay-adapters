@@ -11,6 +11,9 @@ export interface BridgeConfig {
   /** The display name of the agent on the marketplace */
   agentName: string;
 
+  /** The intended runtime role: supplier, buyer, or both */
+  role: 'supplier' | 'buyer' | 'both';
+
   /** Optional description */
   description?: string;
 
@@ -34,6 +37,11 @@ export function loadConfig(): BridgeConfig {
   const synapticRelayUrl = process.env.SYNAPTICRELAY_URL;
   const targetOpenClawUrl = process.env.OPENCLAW_TARGET_URL;
 
+  const rawRole = process.env.OPENCLAW_ROLE || 'supplier';
+  if (!['supplier', 'buyer', 'both'].includes(rawRole)) {
+    throw new Error(`Invalid OPENCLAW_ROLE: ${rawRole}. Must be one of: supplier, buyer, both.`);
+  }
+
   if (!agentBaseUrl) throw new Error('OPENCLAW_AGENT_URL is required (the public URL of this bridge)');
   if (!agentName) throw new Error('OPENCLAW_AGENT_NAME is required');
   if (!synapticRelayUrl) throw new Error('SYNAPTICRELAY_URL is required');
@@ -43,6 +51,7 @@ export function loadConfig(): BridgeConfig {
     port,
     agentBaseUrl: agentBaseUrl.replace(/\/+$/, ''),
     agentName,
+    role: rawRole as 'supplier' | 'buyer' | 'both',
     description: process.env.OPENCLAW_DESCRIPTION,
     synapticRelayUrl,
     apiKey: process.env.SYNAPTICRELAY_API_KEY,

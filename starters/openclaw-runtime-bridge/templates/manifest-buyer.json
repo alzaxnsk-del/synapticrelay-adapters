@@ -1,0 +1,13 @@
+{
+  "specVersion": "1.0",
+  "runtime": {
+    "name": "Topic Radar (Buyer)",
+    "type": "openclaw",
+    "version": "1.0.0"
+  },
+  "role": "buyer",
+  "endpoints": {
+    "health": "http://change-to-your-bridge-url/health",
+    "webhook": "http://change-to-your-bridge-url/webhook"
+  }
+}

@@ -1,9 +1,9 @@
 import express from 'express';
 import { loadConfig } from './config';
-import { invokeTargetAgent, checkTargetHealth, type InvokePayload } from './openclaw-client';
+import { invokeTargetAgent, checkTargetHealth, forwardWebhook, type InvokePayload } from './openclaw-client';
 
 const config = loadConfig();
-const app = express();
+export const app = express();
 
 app.use(express.json());
 
@@ -37,11 +37,14 @@ app.get('/health', async (req, res) => {
 });
 
 /**
- * POST /invoke
+ * POST /invoke (Supplier / Both)
  * SynapticRelay calls this when a buyer executes a contract.
- * We normalize the payload and proxy it to the protected internal OpenClaw agent.
  */
 app.post('/invoke', async (req, res) => {
+  if (config.role === 'buyer') {
+    return res.status(404).json({ error: { code: 'not_found', message: 'This bridge is configured as a buyer and does not accept invokes.' } });
+  }
+
   const payload = req.body as InvokePayload;
 
   if (!payload || !payload.capability) {
@@ -54,7 +57,6 @@ app.post('/invoke', async (req, res) => {
   const response = await invokeTargetAgent(config.targetOpenClawUrl, config.targetTimeoutMs, payload);
 
   if (response.error) {
-    // Determine appropriate HTTP status
     let status = 500;
     if (response.error.code === 'timeout') status = 504;
     if (response.error.code === 'target_not_found') status = 502;
@@ -71,6 +73,24 @@ app.post('/invoke', async (req, res) => {
   });
 });
 
+/**
+ * POST /webhook (Buyer / Both)
+ * SynapticRelay calls this to deliver contract/shortlist events.
+ */
+app.post('/webhook', async (req, res) => {
+  if (config.role === 'supplier') {
+    return res.status(404).json({ error: { code: 'not_found', message: 'This bridge is configured as a supplier and does not accept webhooks.' } });
+  }
+
+  const success = await forwardWebhook(config.targetOpenClawUrl, config.targetTimeoutMs, req.body);
+  
+  if (!success) {
+    return res.status(502).json({ error: { code: 'network_error', message: 'Failed to deliver webhook to internal OpenClaw agent.' } });
+  }
+
+  return res.json({ status: 'received' });
+});
+
 // ==========================================
 // SERVER STARTUP
 // ==========================================
@@ -79,6 +99,7 @@ export function startServer() {
   app.listen(config.port, () => {
     console.log(`\n🔌 OpenClaw Runtime Bridge started on port ${config.port}`);
     console.log(`📡 Agent Name: ${config.agentName}`);
+    console.log(`🎭 Role:       ${config.role}`);
     console.log(`🌐 Public URL: ${config.agentBaseUrl}`);
     console.log(`🎯 Target URL: ${config.targetOpenClawUrl}`);
     console.log(`\nNext step: Run 'npm run register' to publish to SynapticRelay!`);

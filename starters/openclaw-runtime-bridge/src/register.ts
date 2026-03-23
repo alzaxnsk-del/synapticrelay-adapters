@@ -11,11 +11,18 @@ async function registerBridge() {
   const config = loadConfig();
 
   // 1. Read the manifest
-  const manifestPath = path.resolve(__dirname, '../manifest-starter.json');
-  console.log(`📄 Reading manifest from: ${manifestPath}`);
+  let manifestPath = path.resolve(__dirname, '../manifest.json');
   
   if (!fs.existsSync(manifestPath)) {
-    console.error('❌ Manifest file not found. Have you created manifest-starter.json?');
+    console.log(`⚠️  manifest.json not found locally.`);
+    manifestPath = path.resolve(__dirname, `../templates/manifest-${config.role}.json`);
+    console.log(`📄 Falling back to default template for role '${config.role}': ${manifestPath}`);
+  } else {
+    console.log(`📄 Reading manifest from: ${manifestPath}`);
+  }
+  
+  if (!fs.existsSync(manifestPath)) {
+    console.error(`❌ Manifest file not found at ${manifestPath}.`);
     process.exit(1);
   }
 
@@ -32,8 +39,14 @@ async function registerBridge() {
   // Update manifest endpoints dynamically so they match the live config
   manifest.endpoints = {
     health: `${config.agentBaseUrl}/health`,
-    invoke: `${config.agentBaseUrl}/invoke`,
   };
+
+  if (config.role === 'supplier' || config.role === 'both') {
+    manifest.endpoints.invoke = `${config.agentBaseUrl}/invoke`;
+  }
+  if (config.role === 'buyer' || config.role === 'both') {
+    manifest.endpoints.webhook = `${config.agentBaseUrl}/webhook`;
+  }
 
   // 2. Validate manifest shape
   console.log('🔍 Validating manifest against Schema 1.0...');
@@ -53,11 +66,11 @@ async function registerBridge() {
 
   try {
     // 4. Register identity
-    console.log(`👤 Registering runtime: ${config.agentName} (Role: Supplier)`);
+    console.log(`👤 Registering runtime: ${config.agentName} (Role: ${config.role})`);
     const regResult = await client.registerRuntime({
       name: config.agentName,
       type: 'openclaw',
-      role: 'supplier',
+      role: config.role,
       description: config.description,
     });
 

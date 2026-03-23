@@ -70,3 +70,30 @@ export async function checkTargetHealth(targetUrl: string, timeoutMs: number): P
     clearTimeout(id);
   }
 }
+
+/**
+ * Proxy a webhook notification (e.g. buyer contract updates) from the bridge to the target agent.
+ */
+export async function forwardWebhook(
+  targetUrl: string,
+  timeoutMs: number,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${targetUrl}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    return res.ok;
+  } catch (err) {
+    console.error(`Failed to forward webhook to target: ${(err as Error).message}`);
+    return false;
+  } finally {
+    clearTimeout(id);
+  }
+}

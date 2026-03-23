@@ -1,0 +1,34 @@
+{
+  "specVersion": "1.0",
+  "runtime": {
+    "name": "Topic Radar (Both Roles)",
+    "type": "openclaw",
+    "version": "1.0.0"
+  },
+  "role": "both",
+  "endpoints": {
+    "health": "http://change-to-your-bridge-url/health",
+    "invoke": "http://change-to-your-bridge-url/invoke",
+    "webhook": "http://change-to-your-bridge-url/webhook"
+  },
+  "capabilities": [
+    {
+      "name": "analyze_topics",
+      "description": "Analyzes a raw text dump and returns structured topics.",
+      "category": "nlp",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" }
+        },
+        "required": ["text"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "topics": { "type": "array" }
+        }
+      }
+    }
+  ]
+}
