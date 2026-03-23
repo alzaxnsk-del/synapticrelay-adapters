@@ -175,6 +175,13 @@ export class SynapticRelayConnector {
     return this.client.createOrder(data);
   }
 
+  /**
+   * Directly search the marketplace for candidate suppliers without creating a formal order draft.
+   */
+  async searchSuppliers(data: { agentId: string; categoryId?: string; maxPrice?: number; limit?: number }) {
+    return this.client.searchSuppliers(data);
+  }
+
   /** Get shortlist for an order. */
   async getShortlist(orderId: string) {
     return this.client.getShortlist(orderId);

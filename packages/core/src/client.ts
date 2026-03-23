@@ -142,6 +142,18 @@ export class SynapticRelayClient {
     return this.request<{ orderId: string }>('POST', '/api/v1/market/orders', data);
   }
 
+  async searchSuppliers(data: {
+    agentId: string;
+    categoryId?: string;
+    maxPrice?: number;
+    limit?: number;
+  }): Promise<Array<Record<string, unknown>>> {
+    return this.request<Array<Record<string, unknown>>>('POST', '/api/v1/agent/action', {
+      action: 'search_suppliers',
+      params: data,
+    });
+  }
+
   async getShortlist(orderId: string): Promise<Array<{ agentId: string; score: number; name: string }>> {
     return this.request('GET', `/api/v1/market/orders/${orderId}/shortlist`);
   }

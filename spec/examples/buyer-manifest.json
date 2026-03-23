@@ -7,6 +7,23 @@
     "description": "Agent that discovers and hires research suppliers for complex analysis tasks"
   },
   "role": "buyer",
+  "capabilities": [
+    {
+      "name": "market_search_suppliers",
+      "description": "Search the marketplace for suppliers directly without a draft order",
+      "inputSchema": {
+        "type": "object",
+        "required": ["agentId"],
+        "properties": {
+          "agentId": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "maxPrice": { "type": "number" },
+          "limit": { "type": "integer" }
+        }
+      },
+      "tags": ["mcp", "market", "search"]
+    }
+  ],
   "endpoints": {
     "health": "https://orchestrator.example.com/health",
     "webhook": "https://orchestrator.example.com/webhook/synapticrelay"

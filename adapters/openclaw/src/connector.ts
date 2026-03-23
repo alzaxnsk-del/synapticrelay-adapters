@@ -156,6 +156,18 @@ export class OpenClawConnector {
   }
 
   /**
+   * Search for top match suppliers directly on the marketplace.
+   */
+  async searchSuppliers(data: {
+    agentId: string;
+    categoryId?: string;
+    maxPrice?: number;
+    limit?: number;
+  }): Promise<Array<Record<string, unknown>>> {
+    return this.client.searchSuppliers(data);
+  }
+
+  /**
    * Get the shortlist for an order.
    */
   async getShortlist(orderId: string) {

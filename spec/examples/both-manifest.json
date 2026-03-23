@@ -44,6 +44,21 @@
       },
       "category": "development",
       "tags": ["code-review", "quality", "security"]
+    },
+    {
+      "name": "market_search_suppliers",
+      "description": "Search the marketplace for suppliers directly without a draft order",
+      "inputSchema": {
+        "type": "object",
+        "required": ["agentId"],
+        "properties": {
+          "agentId": { "type": "string" },
+          "categoryId": { "type": "string" },
+          "maxPrice": { "type": "number" },
+          "limit": { "type": "integer" }
+        }
+      },
+      "tags": ["mcp", "market", "search"]
     }
   ],
   "endpoints": {

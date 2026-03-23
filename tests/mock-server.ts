@@ -167,6 +167,7 @@ async function handleRequest(
       ];
       const buyerActions = [
         { name: 'create_order', description: 'Create a marketplace order', method: 'POST', path: '/api/v1/market/orders', available: true },
+        { name: 'market_search_suppliers', description: 'Search the marketplace for suppliers', method: 'POST', path: '/api/v1/agent/action', available: true },
         { name: 'view_shortlist', description: 'View matching suppliers', method: 'GET', path: '/api/v1/market/orders/:id/shortlist', available: true },
       ];
       let actions = runtime.role === 'supplier' ? supplierActions :
@@ -202,6 +203,14 @@ async function handleRequest(
   // POST /api/v1/market/orders
   if (method === 'POST' && path === '/api/v1/market/orders') {
     return json(res, 201, { orderId: `ord_mock_${Date.now()}` });
+  }
+
+  // POST /api/v1/agent/action
+  if (method === 'POST' && path === '/api/v1/agent/action') {
+    return json(res, 200, [
+      { agentId: 'supplier-mock-1', score: 0.95, name: 'Premium Data Service', price: 0.05 },
+      { agentId: 'supplier-mock-2', score: 0.88, name: 'Standard Data Service', price: 0.01 }
+    ]);
   }
 
   // GET /api/v1/market/orders/:id/shortlist

@@ -5,11 +5,15 @@
  * where to find this bridge and can start inspecting it.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+
 export interface CheckInResult {
   success: boolean;
   sessionId?: string;
   status?: string;
   error?: string;
+  apiKey?: string;
 }
 
 export async function checkIn(
@@ -52,8 +56,28 @@ export async function checkIn(
     }
 
     const body = await res.json() as {
-      data?: { sessionId?: string; status?: string };
+      data?: { sessionId?: string; status?: string; apiKey?: string };
     };
+
+    let newApiKey = undefined;
+    if (body.data?.apiKey && body.data.apiKey !== connectToken) {
+      newApiKey = body.data.apiKey;
+      try {
+        const envPath = path.resolve(process.cwd(), '.env');
+        if (fs.existsSync(envPath)) {
+          let envContent = fs.readFileSync(envPath, 'utf8');
+          if (envContent.includes(connectToken)) {
+            envContent = envContent.replace(connectToken, newApiKey);
+            fs.writeFileSync(envPath, envContent, 'utf8');
+            console.log(`\n[${agentId}] 🔑 Zero-Intervention API Key Upgrade complete!`);
+            console.log(`[${agentId}]    Successfully saved permanent API key 'ac_...' to .env`);
+          }
+        }
+      } catch (e: any) {
+        console.error(`[${agentId}] ⚠️ Failed to auto-upgrade .env file: ${e.message}`);
+      }
+    }
+
     console.log(`\n[${agentId}] ✅ Check-in successful!`);
     console.log(`[${agentId}]    Session ID: ${body.data?.sessionId ?? 'n/a'}`);
     console.log(`[${agentId}]    Status:     ${body.data?.status ?? 'n/a'}`);
@@ -65,6 +89,7 @@ export async function checkIn(
       success: true,
       sessionId: body.data?.sessionId,
       status: body.data?.status,
+      apiKey: newApiKey,
     };
   } catch (err: any) {
     if (err.cause?.code === 'ECONNREFUSED' || err.message?.includes('fetch failed')) {

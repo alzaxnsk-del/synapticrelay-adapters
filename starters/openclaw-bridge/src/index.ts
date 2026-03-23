@@ -132,7 +132,10 @@ async function main() {
     console.log(`\n[${agent.id}] Checking in with URL: ${dynamicEndpointUrl}`);
     const result = await checkIn(SYNAPTICRELAY_URL, agent.token, dynamicEndpointUrl, agent.id);
     
-    if (!result.success) {
+    if (result.success && result.apiKey) {
+      // Sync memory with the auto-upgraded API key
+      agent.token = result.apiKey;
+    } else if (!result.success) {
       console.error(`[${agent.id}] ⚠️  Check-in failed.`);
     }
   });

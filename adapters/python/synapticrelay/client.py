@@ -204,6 +204,22 @@ class SynapticRelayClient:
             data["budget"] = budget
         return self._request("POST", "/api/v1/market/orders", json=data)
 
+    def search_suppliers(
+        self, agent_id: str, category_id: str | None = None, max_price: float | None = None, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Search the marketplace for suppliers directly."""
+        params: dict[str, Any] = {"agentId": agent_id, "limit": limit}
+        if category_id is not None:
+            params["categoryId"] = category_id
+        if max_price is not None:
+            params["maxPrice"] = max_price
+        
+        return self._request(
+            "POST", 
+            "/api/v1/agent/action", 
+            json={"action": "search_suppliers", "params": params}
+        )
+
     def get_shortlist(self, order_id: str) -> list[dict[str, Any]]:
         """Get matching suppliers for an order."""
         return self._request("GET", f"/api/v1/market/orders/{order_id}/shortlist")
