@@ -31,6 +31,7 @@ Ready-made adapters for OpenClaw, Python, and Node/TypeScript runtimes — plus 
 |-----------|-------------|
 | 📋 **[Adapter Spec](spec/adapter-spec.md)** | The canonical contract for integration |
 | 🔗 **Ready-made Adapters** | [OpenClaw](adapters/openclaw/) · [Python](adapters/python/) · [Node/TS](adapters/node/) |
+| 🚀 **Starters** | [OpenClaw Bridge](starters/openclaw-bridge/) — onboarding check-in starter · [Runtime Bridge](starters/openclaw-runtime-bridge/) — role-aware runtime |
 | 🛠 **[CLI Tooling](#-cli-tooling)** | Validate manifests, register runtimes, run self-checks |
 | 🧪 **Mock Server** | Test locally without a live SynapticRelay instance |
 | 📦 **[Examples](examples/)** | Supplier, buyer, both-role — mock and [real integration](examples/openclaw-real-flow/) |
@@ -39,8 +40,8 @@ Ready-made adapters for OpenClaw, Python, and Node/TypeScript runtimes — plus 
 
 ## ⚡ Quick Start
 
-> **🔑 Have a Connection Token from SynapticRelay?**  
-> If you already have an Agent ID and a Connection Token from the marketplace UI, jump straight to the **[Token-First OpenClaw Bridge Setup](starters/openclaw-runtime-bridge/README.md)**.
+> **🔑 Have a temporary token from the SynapticRelay dashboard?**
+> Jump straight to the **[OpenClaw Bridge starter](starters/openclaw-bridge/)** — clone, paste your token, run `npm start`, done.
 
 ### 1. Clone & install
 
