@@ -1,9 +1,9 @@
 /**
- * index.ts — Entry point
+ * index.ts — Multi-Tenant Entry point
  *
- * 1. Load config from .env
- * 2. Start HTTP server (so /health and /manifest are available)
- * 3. Perform the onboarding check-in to SynapticRelay
+ * 1. Load config from .env (parsing multiple AGENT_X_ variables)
+ * 2. Start HTTP server providing /:agentId/health and /:agentId/manifest
+ * 3. Perform the onboarding check-in to SynapticRelay for EACH configured agent
  */
 
 import dotenv from 'dotenv';
@@ -12,29 +12,62 @@ dotenv.config();
 import { createServer } from './server';
 import { checkIn } from './check-in';
 
-// ─── Config ───────────────────────────────────────────────────────
+export interface AgentConfig {
+  id: string;
+  token: string;
+}
+
+// ─── Global Config ────────────────────────────────────────────────
 
 const SYNAPTICRELAY_URL = (process.env.SYNAPTICRELAY_URL || '').replace(/\/+$/, '');
-const CONNECT_TOKEN = process.env.SYNAPTICRELAY_CONNECT_TOKEN || '';
-const AGENT_ID = process.env.OPENCLAW_AGENT_ID || 'my-agent';
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const PUBLIC_HOST = process.env.PUBLIC_HOST || '';
+const OPENCLAW_TARGET_URL = (process.env.OPENCLAW_TARGET_URL || '').replace(/\/+$/, '');
+
+// ─── Parsing Agents ───────────────────────────────────────────────
+
+function parseAgents(): AgentConfig[] {
+  const agents: AgentConfig[] = [];
+  
+  // Look for any AGENT_X_ID environment variables and match them with TOKENS
+  const envKeys = Object.keys(process.env);
+  const idKeys = envKeys.filter(k => k.match(/^AGENT_\d+_ID$/));
+
+  for (const idKey of idKeys) {
+    const prefixMatch = idKey.match(/^(AGENT_\d+)_ID$/);
+    if (!prefixMatch) continue;
+
+    const prefix = prefixMatch[1];
+    const id = process.env[`${prefix}_ID`];
+    const token = process.env[`${prefix}_TOKEN`];
+
+    if (id && token) {
+      agents.push({ id, token });
+    } else {
+      console.warn(`⚠️  Incomplete config for ${prefix}. Both ID and TOKEN are required.`);
+    }
+  }
+
+  return agents;
+}
 
 // ─── Validation ───────────────────────────────────────────────────
 
-function validateConfig(): void {
+function validateConfig(agents: AgentConfig[]): void {
   const missing: string[] = [];
   if (!SYNAPTICRELAY_URL) missing.push('SYNAPTICRELAY_URL');
-  if (!CONNECT_TOKEN) missing.push('SYNAPTICRELAY_CONNECT_TOKEN');
+  if (!OPENCLAW_TARGET_URL) missing.push('OPENCLAW_TARGET_URL');
+  
   if (missing.length > 0) {
-    console.error('❌ Missing required environment variables:');
+    console.error('❌ Missing required global environment variables:');
     missing.forEach((v) => console.error(`   - ${v}`));
     console.error('\nCopy .env.example → .env and fill in the values.');
     process.exit(1);
   }
-  if (!CONNECT_TOKEN.startsWith('oc_tmp_')) {
-    console.warn('⚠️  SYNAPTICRELAY_CONNECT_TOKEN does not start with "oc_tmp_".');
-    console.warn('   Make sure you pasted the correct temporary token from the dashboard.');
+
+  if (agents.length === 0) {
+    console.error('❌ No agents configured! Please provide at least AGENT_1_ID and AGENT_1_TOKEN.');
+    process.exit(1);
   }
 }
 
@@ -64,34 +97,48 @@ async function resolveEndpointUrl(): Promise<string> {
 
 async function main() {
   console.log('╔══════════════════════════════════════════════╗');
-  console.log('║   SynapticRelay · OpenClaw Bridge  v1.0.0   ║');
+  console.log('║   SynapticRelay · Multi-Tenant Bridge v2.0   ║');
   console.log('╚══════════════════════════════════════════════╝');
 
-  validateConfig();
+  const agents = parseAgents();
+  validateConfig(agents);
 
-  const app = createServer(AGENT_ID);
+  console.log(`\n📋 Found ${agents.length} configured agents:`);
+  agents.forEach(a => console.log(`   - ${a.id}`));
+
+  const app = createServer(agents, OPENCLAW_TARGET_URL);
 
   // Step 1: Start HTTP server FIRST (SynapticRelay will call us immediately after check-in)
   await new Promise<void>((resolve) => {
     app.listen(PORT, () => {
-      console.log(`\n🔌 Bridge HTTP server listening on port ${PORT}`);
-      console.log(`   GET  http://localhost:${PORT}/health`);
-      console.log(`   GET  http://localhost:${PORT}/manifest`);
-      console.log(`   POST http://localhost:${PORT}/invoke`);
+      console.log(`\n🔌 Bridge HTTP multiplexer listening on port ${PORT}`);
+      console.log(`   GET  http://localhost:${PORT}/:agentId/health`);
+      console.log(`   GET  http://localhost:${PORT}/:agentId/manifest`);
+      console.log(`   POST http://localhost:${PORT}/:agentId/invoke`);
       resolve();
     });
   });
 
-  // Step 2: Resolve public URL
-  const endpointUrl = await resolveEndpointUrl();
+  // Step 2: Resolve public global URL
+  const baseEndpointUrl = await resolveEndpointUrl();
 
-  // Step 3: Check in with SynapticRelay
-  const result = await checkIn(SYNAPTICRELAY_URL, CONNECT_TOKEN, endpointUrl);
+  // Step 3: Check in with SynapticRelay for EACH agent
+  console.log(`\n🚀 Starting check-ins for ${agents.length} agents...`);
+  
+  const checkInPromises = agents.map(async (agent) => {
+    // Crucial: The endpointUrl must map dynamically to this specific agent
+    const dynamicEndpointUrl = `${baseEndpointUrl}/${agent.id}`;
+    
+    console.log(`\n[${agent.id}] Checking in with URL: ${dynamicEndpointUrl}`);
+    const result = await checkIn(SYNAPTICRELAY_URL, agent.token, dynamicEndpointUrl, agent.id);
+    
+    if (!result.success) {
+      console.error(`[${agent.id}] ⚠️  Check-in failed.`);
+    }
+  });
 
-  if (!result.success) {
-    console.error('\n⚠️  Check-in failed, but the bridge server is still running.');
-    console.error('   Fix the issue above and restart the bridge.');
-  }
+  await Promise.all(checkInPromises);
+  console.log('\n🏁 All startup routines completed.');
 }
 
 main().catch((err) => {

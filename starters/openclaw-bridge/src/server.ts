@@ -1,54 +1,93 @@
 /**
  * server.ts
  *
- * Express HTTP server exposing the endpoints SynapticRelay expects
- * during the onboarding inspection phase:
- *   GET  /health   — liveness probe
- *   GET  /manifest — agent capability descriptor
- *   POST /invoke   — proxy to the real OpenClaw agent (stub for now)
+ * Dynamic Express HTTP server multiplexing traffic for multiple OpenClaw agents.
+ * Exposes dynamic REST paths:
+ *   GET  /:agentId/health   — liveness probe
+ *   GET  /:agentId/manifest — agent capability descriptor
+ *   POST /:agentId/invoke   — authenticated proxy to OpenClaw gateway
  */
 
 import express from 'express';
+import type { AgentConfig } from './index';
 
 const startedAt = Date.now();
 
-export function createServer(agentId: string) {
+export function createServer(agents: AgentConfig[], openclawTargetUrl: string) {
   const app = express();
   app.use(express.json());
 
-  // ─── GET /health ────────────────────────────────────────────────
-  app.get('/health', (_req, res) => {
+  // Helper to validate if an agent is actually hosted on this bridge node
+  const getAgent = (id: string) => agents.find(a => a.id === id);
+
+  // ─── GET /:agentId/health ───────────────────────────────────────
+  app.get('/:agentId/health', (req, res) => {
+    const agent = getAgent(req.params.agentId);
+    if (!agent) return res.status(404).json({ error: 'Agent not found on this bridge' });
+
     res.json({
       status: 'healthy',
       version: '1.0.0',
+      agentId: agent.id,
       uptime: Math.floor((Date.now() - startedAt) / 1000),
     });
   });
 
-  // ─── GET /manifest ──────────────────────────────────────────────
-  app.get('/manifest', (_req, res) => {
+  // ─── GET /:agentId/manifest ─────────────────────────────────────
+  app.get('/:agentId/manifest', (req, res) => {
+    const agent = getAgent(req.params.agentId);
+    if (!agent) return res.status(404).json({ error: 'Agent not found on this bridge' });
+
     res.json({
-      name: agentId,
-      description: 'OpenClaw agent connected via SynapticRelay bridge',
+      name: agent.id,
+      description: 'OpenClaw agent connected via Multi-Tenant SynapticRelay bridge',
       version: '1.0.0',
       capabilities: ['invoke'],
       endpoints: {
-        invoke: '/invoke',
+        invoke: `/${agent.id}/invoke`,
       },
     });
   });
 
-  // ─── POST /invoke ───────────────────────────────────────────────
-  // Stub — returns 501 until you wire it to your real OpenClaw agent.
-  app.post('/invoke', (_req, res) => {
-    res.status(501).json({
-      error: {
-        code: 'not_implemented',
-        message:
-          'Invoke proxy is not configured yet. ' +
-          'Wire this endpoint to your OpenClaw agent to handle real requests.',
-      },
-    });
+  // ─── POST /:agentId/invoke ──────────────────────────────────────
+  app.post('/:agentId/invoke', async (req, res) => {
+    const agent = getAgent(req.params.agentId);
+    if (!agent) return res.status(404).json({ error: 'Agent not found on this bridge' });
+
+    // Proxy the execution to the isolated OpenClaw target.
+    // We inject an x-openclaw-agent-id header routing property so the
+    // downstream OpenClaw cluster knows exactly which tenant is being invoked.
+    try {
+      const targetUrl = `${openclawTargetUrl}/invoke`;
+      
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-openclaw-agent-id': agent.id,
+        },
+        body: JSON.stringify(req.body),
+        signal: AbortSignal.timeout(30000), // 30s timeout
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: {
+            code: 'target_error',
+            message: `Target OpenClaw agent responded with ${response.status}`,
+          }
+        });
+      }
+
+      const responseBody = await response.json();
+      return res.json({ status: 'success', data: responseBody });
+
+    } catch (err: any) {
+      if (err.name === 'TimeoutError' || err.code === 'UND_ERR_HEADERS_TIMEOUT') {
+        return res.status(504).json({ error: { code: 'timeout', message: 'Target OpenClaw agent timed out' }});
+      }
+      return res.status(502).json({ error: { code: 'network_error', message: err.message }});
+    }
   });
 
   return app;

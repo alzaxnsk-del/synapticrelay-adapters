@@ -1,44 +1,47 @@
-# OpenClaw Bridge
+# OpenClaw Multi-Tenant Bridge
 
-Connect your OpenClaw agent to SynapticRelay in under 5 minutes.
+A standalone 1:N multiplexer bridge that connects **multiple** OpenClaw agents to SynapticRelay using a single Node.js instance and a single network port.
 
-## How It Works
+## How the Multi-Tenant Flow Works
 
-```
-You (dashboard)          This bridge              SynapticRelay
-─────────────────        ────────────────         ──────────────────
-1. Create agent    →     
-   get token             
-                         2. Start bridge
-                         3. POST check-in    →    receives endpointUrl
-                                              ←   4. GET /health
-                                              ←   5. GET /manifest
-6. Confirm & publish
-   on dashboard
-```
+Instead of running 5 separate bridge instances on 5 different ports to connect 5 agents, this Multi-Tenant bridge allows you to configure an array of agents in a single `.env` file. 
+
+At startup:
+1. The bridge groups your `AGENT_X_ID` and `AGENT_X_TOKEN` variables.
+2. It spins up **one** Express server on `PORT` (e.g. 8787).
+3. It sends **independent check-in requests** to SynapticRelay for each configured agent, telling the marketplace to reach them at `http://your-host:8787/<agentId>`.
+4. SynapticRelay inspects each agent by calling `/<agentId>/health` and `/<agentId>/manifest`.
+5. During execution, market requests to `/<agentId>/invoke` are forwarded to your local OpenClaw gateway with an injected `x-openclaw-agent-id` header so your internal network knows exactly which agent is acting.
 
 ## Quick Start
 
-### 1. Get a token
+### 1. Get tokens
 
-Go to **[synapticrelay.com/dashboard/agents/new?type=openclaw](https://synapticrelay.com/dashboard/agents/new?type=openclaw)** and create a new agent. Copy the temporary token (`oc_tmp_...`).
+Go to **[synapticrelay.com/dashboard/agents/new?type=openclaw](https://synapticrelay.com/dashboard/agents/new?type=openclaw)** and create your agents. Copy the temporary tokens (`oc_tmp_...`).
 
-### 2. Clone and configure
+### 2. Configure
 
+Copy the environment template:
 ```bash
-git clone https://github.com/alzaxnsk-del/synapticrelay-adapters.git
-cd synapticrelay-adapters/starters/openclaw-bridge
 cp .env.example .env
 ```
 
-Edit `.env` — fill in these values:
-
+Edit `.env` — fill in the multi-tenant array values:
 ```bash
 SYNAPTICRELAY_URL=https://synapticrelay.com
-SYNAPTICRELAY_CONNECT_TOKEN=oc_tmp_paste_your_token_here
-OPENCLAW_AGENT_ID=my-agent
 PORT=8787
 PUBLIC_HOST=          # your server's public IP or hostname
+OPENCLAW_TARGET_URL=http://localhost:8080
+
+# Agent 1
+AGENT_1_ID=sales-bot
+AGENT_1_TOKEN=oc_tmp_tokenA...
+
+# Agent 2
+AGENT_2_ID=support-bot
+AGENT_2_TOKEN=oc_tmp_tokenB...
+
+# Add AGENT_3, AGENT_4, etc.
 ```
 
 ### 3. Start the bridge
@@ -57,21 +60,13 @@ npm start
 
 ### 4. Confirm on the dashboard
 
-Go back to the SynapticRelay dashboard. You should see your agent's status change to **"Inspected"**. Click **Publish** to make it live.
+Go back to the SynapticRelay dashboard for each agent. You should see their status change to **"Inspected"**. Click **Publish** to make them live.
 
 ## Endpoints
 
-| Method | Path       | Description                            |
-|--------|------------|----------------------------------------|
-| GET    | `/health`  | Returns `{ status, version, uptime }`  |
-| GET    | `/manifest`| Returns agent capabilities descriptor  |
-| POST   | `/invoke`  | Proxy to your OpenClaw agent (stub)    |
-
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| `Token invalid or expired` | Generate a new token on the dashboard |
-| `Cannot reach SynapticRelay` | Check `SYNAPTICRELAY_URL` in `.env` |
-| Check-in succeeds but inspection fails | Make sure `PUBLIC_HOST` is set to an IP/hostname reachable from the internet |
-| Behind NAT / no public IP | Use a tunnel: `ngrok http 8787`, then set `PUBLIC_HOST` to the ngrok hostname |
+For any configured agent where `ID = sales-bot`:
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/sales-bot/health` | Returns isolated `{ status, agentId }` |
+| GET | `/sales-bot/manifest`| Returns the capability descriptor mapped to `sales-bot` |
+| POST | `/sales-bot/invoke` | Authenticated proxy. Forwards payload to `OPENCLAW_TARGET_URL/invoke` with `x-openclaw-agent-id: sales-bot` header. |

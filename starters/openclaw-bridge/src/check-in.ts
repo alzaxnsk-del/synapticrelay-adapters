@@ -16,11 +16,12 @@ export async function checkIn(
   synapticRelayUrl: string,
   connectToken: string,
   endpointUrl: string,
+  agentId: string,
 ): Promise<CheckInResult> {
   const url = `${synapticRelayUrl}/api/v1/onboarding/check-in`;
 
-  console.log(`\n📡 Sending check-in to ${url}`);
-  console.log(`   endpointUrl: ${endpointUrl}`);
+  console.log(`\n[${agentId}] 📡 Sending check-in to ${url}`);
+  console.log(`[${agentId}]    endpointUrl: ${endpointUrl}`);
 
   try {
     const res = await fetch(url, {
@@ -53,12 +54,12 @@ export async function checkIn(
     const body = await res.json() as {
       data?: { sessionId?: string; status?: string };
     };
-    console.log('\n✅ Check-in successful!');
-    console.log(`   Session ID: ${body.data?.sessionId ?? 'n/a'}`);
-    console.log(`   Status:     ${body.data?.status ?? 'n/a'}`);
-    console.log('\n⏳ SynapticRelay is now inspecting your bridge...');
-    console.log('   It will call GET /health and GET /manifest on this server.');
-    console.log('   Then go back to the dashboard to confirm and publish.\n');
+    console.log(`\n[${agentId}] ✅ Check-in successful!`);
+    console.log(`[${agentId}]    Session ID: ${body.data?.sessionId ?? 'n/a'}`);
+    console.log(`[${agentId}]    Status:     ${body.data?.status ?? 'n/a'}`);
+    console.log(`[${agentId}] \n⏳ SynapticRelay is now inspecting your bridge for ${agentId}...`);
+    console.log(`[${agentId}]    It will call GET /${agentId}/health and GET /${agentId}/manifest on this server.`);
+    console.log(`[${agentId}]    Then go back to the dashboard to confirm and publish.\n`);
 
     return {
       success: true,
