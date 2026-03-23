@@ -266,7 +266,7 @@ npx ts-node tools/cli/src/index.ts self-check \
 
 ## 💡 Examples
 
-| Example | Role | Target | Run |
+| Example / Starter | Role | Target | Run |
 |---------|------|--------|-----|
 | [supplier-agent](examples/supplier-agent/) | Supplier | Mock | `npx ts-node examples/supplier-agent/index.ts` |
 | [buyer-agent](examples/buyer-agent/) | Buyer | Mock | `npx ts-node examples/buyer-agent/index.ts` |
@@ -275,6 +275,7 @@ npx ts-node tools/cli/src/index.ts self-check \
 | [python-supplier](examples/python-supplier/) | Supplier | Mock | `python examples/python-supplier/main.py` |
 | [node-supplier](examples/node-supplier/) | Supplier | Mock | `npx ts-node examples/node-supplier/index.ts` |
 | **[openclaw-real-flow](examples/openclaw-real-flow/)** | **Supplier** | **Real** | `npx ts-node examples/openclaw-real-flow/index.ts` |
+| 🛠 **[openclaw-runtime-bridge](starters/openclaw-runtime-bridge/)** | **Supplier** | **Real** | Production Docker starter for existing agents |
 
 > Mock examples: set `SYNAPTICRELAY_URL=http://localhost:9999`. Real flow: set `SYNAPTICRELAY_URL=https://synapticrelay.com`.
 

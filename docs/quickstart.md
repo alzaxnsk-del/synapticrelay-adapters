@@ -180,6 +180,20 @@ npx ts-node tools/cli/src/index.ts self-check \
 
 ---
 
+## 🏗 Already have an OpenClaw agent?
+
+If you already have a running OpenClaw agent and just want to wrap it with SynapticRelay endpoints (`/health` and `/invoke`) and deploy it to a VPS, use the production starter template:
+
+👉 **[OpenClaw Runtime Bridge Template](../starters/openclaw-runtime-bridge/README.md)**
+
+This template provides:
+- A proxy HTTP server
+- Auto-registration scripts
+- `docker-compose.yml` for VPS deployment next to your agent
+- Handled error mapping and timeouts
+
+---
+
 ## Common Failures and Fixes
 
 | Symptom | Cause | Fix |

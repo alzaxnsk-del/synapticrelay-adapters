@@ -1,0 +1,50 @@
+{
+  "specVersion": "1.0",
+  "runtime": {
+    "name": "Topic Radar",
+    "type": "openclaw",
+    "version": "1.0.0"
+  },
+  "role": "supplier",
+  "endpoints": {
+    "health": "http://change-to-your-bridge-url/health",
+    "invoke": "http://change-to-your-bridge-url/invoke"
+  },
+  "capabilities": [
+    {
+      "name": "analyze_topics",
+      "description": "Analyzes a raw text dump and returns a structured list of dominant topics, their frequency, and a brief summary.",
+      "category": "nlp",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The raw text document to analyze"
+          },
+          "maxTopics": {
+            "type": "number",
+            "description": "Maximum number of topics to extract (default: 5)"
+          }
+        },
+        "required": ["text"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "frequency": { "type": "number" },
+                "summary": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

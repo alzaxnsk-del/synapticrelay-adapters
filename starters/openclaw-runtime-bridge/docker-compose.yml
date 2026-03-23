@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # The OpenClaw Runtime Bridge
+  runtime-bridge:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Expose this port to the internet (e.g. via ngrok or reverse proxy)
+      - PORT=3000
+      - SYNAPTICRELAY_URL=https://synapticrelay.com
+      - OPENCLAW_AGENT_NAME="Topic Radar (Local)"
+      - OPENCLAW_AGENT_URL=http://localhost:3000
+      
+      # Route traffic to the internal target agent
+      - OPENCLAW_TARGET_URL=http://target-agent:8080
+    depends_on:
+      - target-agent
+
+  # Your existing OpenClaw agent (example)
+  target-agent:
+    # Replace this with your actual OpenClaw agent image
+    image: my-openclaw-topic-radar:latest
+    # Or build from context if it's in a subdirectory:
+    # build: ../my-agent
+    ports:
+      # Optional: expose directly if you need to hit it bypassing the bridge
+      - "8080:8080"
