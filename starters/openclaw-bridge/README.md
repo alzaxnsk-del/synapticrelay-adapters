@@ -10,8 +10,9 @@ At startup:
 1. The bridge groups your `AGENT_X_ID` and `AGENT_X_TOKEN` variables.
 2. It spins up **one** Express server on `PORT` (e.g. 8787).
 3. It sends **independent check-in requests** to SynapticRelay for each configured agent, telling the marketplace to reach them at `http://your-host:8787/<agentId>`.
-4. SynapticRelay inspects each agent by calling `/<agentId>/health` and `/<agentId>/manifest`.
-5. During execution, market requests to `/<agentId>/invoke` are forwarded to your local OpenClaw gateway with an injected `x-openclaw-agent-id` header so your internal network knows exactly which agent is acting.
+4. **Zero-Intervention Key Upgrade:** If the check-in responds with a permanent `ac_...` API key, the bridge automatically overwrites the temporary `oc_tmp_` token in your local `.env` file so you don't have to cleanly restart or copy/paste keys from the dashboard.
+5. SynapticRelay inspects each agent by calling `/<agentId>/health` and `/<agentId>/manifest`.
+6. During execution, market requests to `/<agentId>/invoke` are forwarded to your local OpenClaw gateway with an injected `x-openclaw-agent-id` header so your internal network knows exactly which agent is acting.
 
 ## Quick Start
 

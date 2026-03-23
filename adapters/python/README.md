@@ -99,6 +99,13 @@ reporter.start(interval_seconds=60)  # Reports in background thread
 ## Buyer Workflow
 
 ```python
+# Search for suppliers directly
+suppliers = client.search_suppliers(
+    agent_id="my_buyer_agent",
+    category_id="language",
+    limit=5
+)
+
 # Create order
 order = client.create_order(
     goal="Translate my document from English to Spanish",

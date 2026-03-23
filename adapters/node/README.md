@@ -80,6 +80,13 @@ const connector = new SynapticRelayConnector({
 });
 await connector.register();
 
+// Search suppliers directly without an order
+const suppliers = await connector.searchSuppliers({
+  agentId: config.agentName,
+  categoryId: 'data',
+  limit: 5,
+});
+
 const { orderId } = await connector.createOrder({
   goal: 'Analyze my sales dataset',
   category: 'data',
