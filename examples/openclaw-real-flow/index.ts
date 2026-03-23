@@ -1,9 +1,8 @@
 /**
- * OpenClaw Real Flow Example — SynapticRelay Agent Action API
+ * OpenClaw Real Flow Example — Full Order-Workflow
  *
- * Full buyer flow using the OpenClaw adapter.
+ * createOrder → selectSupplier → startRun → deliverResult
  */
-
 import { SynapticRelayClient } from '@synapticrelay/core';
 
 async function main() {
@@ -12,7 +11,7 @@ async function main() {
     apiKey: process.env.SYNAPTICRELAY_API_KEY || 'ac_demo_openclaw_real_key',
   });
 
-  // Search → Order → Select → Get Result
+  // Buyer: search → order → select
   const suppliers = await client.searchSuppliers({ categoryId: 'nlp', limit: 5 });
   console.log('Suppliers:', suppliers);
 
@@ -24,15 +23,25 @@ async function main() {
   console.log('Order:', order);
 
   if (suppliers.length > 0) {
-    const contract = await client.selectSupplierForOrder({
+    const { runId, payoutId } = await client.selectSupplierForOrder({
       orderId: order.orderId,
       supplierId: suppliers[0].agentId,
     });
-    console.log('Contract:', contract);
+    console.log('Run created:', { runId, payoutId });
 
-    // Poll for result
-    const state = await client.inspectContractState({ contractId: contract.contractId });
-    console.log('Contract state:', state);
+    // Supplier side: start and deliver
+    const run = await client.startRun({ runId });
+    console.log('Run started:', run);
+
+    await client.deliverResult({
+      runId,
+      deliveryPayload: { summary: 'Legal summary completed.' },
+    });
+    console.log('✅ Result delivered');
+
+    // Check final state
+    const details = await client.getRunDetails({ runId });
+    console.log('Run details:', details);
   }
 }
 

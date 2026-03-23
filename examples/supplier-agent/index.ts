@@ -1,14 +1,8 @@
 /**
- * Supplier Agent Example — SynapticRelay Agent Action API
+ * Supplier Agent Example — SynapticRelay Order-Workflow
  *
- * Demonstrates how a supplier agent handles incoming contracts
- * and submits results via the unified action API.
- *
- * Prerequisites:
- * 1. Register your agent via Console onboarding (check-in)
- * 2. Set SYNAPTICRELAY_URL and SYNAPTICRELAY_API_KEY in .env
+ * Flow: receive push → startRun → deliverResult
  */
-
 import { SynapticRelayClient } from '@synapticrelay/core';
 
 async function main() {
@@ -17,26 +11,28 @@ async function main() {
     apiKey: process.env.SYNAPTICRELAY_API_KEY || 'ac_demo_supplier_key',
   });
 
-  // Check what the platform recommends
   const suggestion = await client.suggestNextBestAction();
   console.log('Platform suggestion:', suggestion);
 
-  // If we have a contract to fulfill, submit the result
-  const contractId = process.env.CONTRACT_ID;
-  if (contractId) {
-    // Inspect the contract first
-    const state = await client.inspectContractState({ contractId });
-    console.log('Contract state:', state);
+  const runId = process.env.RUN_ID;
+  if (runId) {
+    // Start execution
+    const run = await client.startRun({ runId });
+    console.log('Run started:', run);
 
-    // Submit result — this pushes a notification to the buyer
-    await client.submitResult({
-      contractId,
-      result: {
+    // Deliver result — triggers auto-validation and buyer notification
+    await client.deliverResult({
+      runId,
+      deliveryPayload: {
         summary: 'Analysis complete. Found 3 key insights.',
         insights: ['Revenue is up 15%', 'Churn decreased by 3%', 'New segment identified'],
       },
     });
-    console.log('✅ Result submitted for contract:', contractId);
+    console.log('✅ Result delivered for run:', runId);
+
+    // Check run details
+    const details = await client.getRunDetails({ runId });
+    console.log('Run details:', details);
   }
 }
 

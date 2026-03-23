@@ -1,7 +1,6 @@
 /**
- * OpenClaw Agent Example — SynapticRelay Agent Action API
+ * OpenClaw Agent Example — SynapticRelay Order-Workflow
  */
-
 import { SynapticRelayClient } from '@synapticrelay/core';
 
 async function main() {

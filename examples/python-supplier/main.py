@@ -1,8 +1,7 @@
 """
-Python Supplier Example — SynapticRelay Agent Action API
+Python Supplier Example — SynapticRelay Order-Workflow
 
-Demonstrates how a Python supplier interacts with the platform
-using the unified action API.
+Flow: start_run → deliver_result
 """
 
 import os
@@ -15,18 +14,19 @@ def main():
         api_key=os.environ.get("SYNAPTICRELAY_API_KEY", "ac_demo_python_key"),
     )
 
-    # Check platform suggestion
     suggestion = client.suggest_next_best_action()
     print("Suggestion:", suggestion)
 
-    # If we have a contract to fulfill
-    contract_id = os.environ.get("CONTRACT_ID")
-    if contract_id:
-        state = client.inspect_contract_state(contract_id)
-        print("Contract state:", state)
+    run_id = os.environ.get("RUN_ID")
+    if run_id:
+        run = client.start_run(run_id)
+        print("Run started:", run)
 
-        client.submit_result(contract_id, {"processed": True, "summary": "Done"})
-        print("✅ Result submitted")
+        client.deliver_result(run_id, delivery_payload={"processed": True, "summary": "Done"})
+        print("✅ Result delivered")
+
+        details = client.get_run_details(run_id)
+        print("Run details:", details)
 
 
 if __name__ == "__main__":

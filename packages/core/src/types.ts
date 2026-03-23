@@ -17,10 +17,13 @@ export type AgentActionName =
   | 'search_suppliers'
   | 'create_order_from_goal'
   | 'select_supplier_for_order'
-  | 'submit_result'
-  | 'get_result'
+  | 'deliver_result'
+  | 'start_run'
+  | 'get_run_details'
+  | 'cancel_order'
+  | 'request_review'
   | 'suggest_next_best_action'
-  | 'inspect_contract_state';
+  | 'inspect_deal_state';
 
 export interface AgentActionRequest<P = Record<string, unknown>> {
   action: AgentActionName;
@@ -39,30 +42,33 @@ export interface Order {
   orderId: string;
   title: string;
   status: string;
+  matchCount?: number;
 }
 
-export interface Contract {
-  contractId: string;
+export interface Run {
+  runId: string;
   orderId: string;
-  supplierId: string;
+  supplierAgentId: string;
+  buyerAgentId: string;
   status: string;
+  deadlineAt?: string;
+  deliveryPayload?: Record<string, unknown>;
+  deliveryArtifactRef?: string;
+  validationSummary?: Record<string, unknown>;
 }
 
-export interface ContractState {
-  contractId: string;
+export interface Payout {
+  payoutId: string;
+  orderId: string;
   status: string;
-  supplierId: string;
-  buyerId: string;
-  createdAt: string;
-  updatedAt: string;
-  resultReady?: boolean;
+  autoReleaseAt?: string;
 }
 
-export interface ActionResult {
-  resultId: string;
-  contractId: string;
-  data: Record<string, unknown>;
-  submittedAt: string;
+export interface SelectSupplierResult {
+  runId: string;
+  payoutId: string;
+  runStatus: string;
+  payoutStatus: string;
 }
 
 export interface Suggestion {
@@ -77,8 +83,9 @@ export type PushEventType = 'contract.execute' | 'contract.result_ready';
 
 export interface PushNotification {
   event: PushEventType;
-  contractId: string;
+  runId: string;
   orderId: string;
+  autoReleaseAt?: string;
   data?: Record<string, unknown>;
   timestamp: string;
 }

@@ -3,13 +3,14 @@ SynapticRelay Agent API Client for Python.
 
 All platform actions go through POST /api/v1/agent/action.
 Auth: X-API-Key header with a permanent key (ac_...).
-The agentId is automatically resolved from the API key.
+
+Order-Workflow: order → select_supplier (creates run + payout) → start_run → deliver_result
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -38,13 +39,7 @@ class SynapticRelayClient:
 
     @classmethod
     def from_env(cls) -> "SynapticRelayClient":
-        """Create client from environment variables.
-
-        Reads:
-            SYNAPTICRELAY_URL — base API URL (required)
-            SYNAPTICRELAY_API_KEY — permanent API key ac_... (required)
-            SYNAPTICRELAY_TIMEOUT — request timeout in seconds
-        """
+        """Create client from environment variables."""
         base_url = os.environ.get("SYNAPTICRELAY_URL")
         api_key = os.environ.get("SYNAPTICRELAY_API_KEY")
         if not base_url:
@@ -96,7 +91,7 @@ class SynapticRelayClient:
             "params": params or {},
         })
 
-    # ─── Typed Convenience Methods ───────────────────────────────
+    # ─── Buyer Actions ───────────────────────────────────────────
 
     def search_suppliers(
         self, category_id: str | None = None, max_price: float | None = None, limit: int = 20
@@ -112,7 +107,7 @@ class SynapticRelayClient:
     def create_order_from_goal(
         self, goal: str, category: str | None = None, budget: float | None = None
     ) -> dict[str, Any]:
-        """Create an order from a goal description."""
+        """Create an order from a goal description. Returns orderId, status, matchCount."""
         params: dict[str, Any] = {"goal": goal}
         if category:
             params["category"] = category
@@ -121,24 +116,51 @@ class SynapticRelayClient:
         return self.action("create_order_from_goal", params)
 
     def select_supplier_for_order(self, order_id: str, supplier_id: str) -> dict[str, Any]:
-        """Select a supplier for an order (auto-contract + push)."""
+        """Select a supplier. Creates Run + Payout and pushes to supplier."""
         return self.action("select_supplier_for_order", {
             "orderId": order_id,
             "supplierId": supplier_id,
         })
 
-    def submit_result(self, contract_id: str, result: dict[str, Any]) -> None:
-        """Supplier submits result for a contract (push to buyer)."""
-        self.action("submit_result", {"contractId": contract_id, "result": result})
+    def cancel_order(self, order_id: str) -> None:
+        """Cancel an order before supplier is selected."""
+        self.action("cancel_order", {"orderId": order_id})
 
-    def get_result(self, contract_id: str) -> dict[str, Any]:
-        """Buyer retrieves the result for a contract."""
-        return self.action("get_result", {"contractId": contract_id})
+    def request_review(self, order_id: str, reason_code: str, comment: str) -> None:
+        """Request a review after result is validated."""
+        self.action("request_review", {
+            "orderId": order_id,
+            "reasonCode": reason_code,
+            "comment": comment,
+        })
+
+    # ─── Supplier Actions ────────────────────────────────────────
+
+    def start_run(self, run_id: str) -> dict[str, Any]:
+        """Supplier starts execution of a run."""
+        return self.action("start_run", {"runId": run_id})
+
+    def deliver_result(
+        self, run_id: str, delivery_payload: dict[str, Any] | None = None, delivery_artifact_ref: str | None = None
+    ) -> None:
+        """Supplier delivers result for a run."""
+        params: dict[str, Any] = {"runId": run_id}
+        if delivery_payload is not None:
+            params["deliveryPayload"] = delivery_payload
+        if delivery_artifact_ref is not None:
+            params["deliveryArtifactRef"] = delivery_artifact_ref
+        self.action("deliver_result", params)
+
+    # ─── Common Actions ──────────────────────────────────────────
+
+    def get_run_details(self, run_id: str) -> dict[str, Any]:
+        """Get details about a run (status, delivery, validation)."""
+        return self.action("get_run_details", {"runId": run_id})
 
     def suggest_next_best_action(self) -> dict[str, Any]:
-        """Get the platform's recommendation for the next best action."""
+        """Get platform recommendation for the next action."""
         return self.action("suggest_next_best_action")
 
-    def inspect_contract_state(self, contract_id: str) -> dict[str, Any]:
-        """Inspect the current state of a contract."""
-        return self.action("inspect_contract_state", {"contractId": contract_id})
+    def inspect_deal_state(self, order_id: str) -> dict[str, Any]:
+        """Inspect the current state of a deal (runs + payouts)."""
+        return self.action("inspect_deal_state", {"orderId": order_id})

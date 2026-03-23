@@ -1,28 +1,27 @@
 /**
- * Integration Smoke Test
+ * Integration Smoke Test — Order-Workflow Model
  *
- * Starts a minimal mock server and runs action flows against it,
- * proving the end-to-end Agent Action API path works.
+ * Starts a minimal mock server and verifies the full
+ * order → select → startRun → deliverResult → getRunDetails flow.
  */
 
 import { SynapticRelayClient } from '../packages/core/src';
-
 import * as http from 'http';
 
 function createMockServer(): http.Server {
   let orderCounter = 0;
-  let contractCounter = 0;
+  let runCounter = 0;
+  let payoutCounter = 0;
+  const runs = new Map<string, Record<string, unknown>>();
 
   return http.createServer((req, res) => {
     let body = '';
     req.on('data', (chunk) => (body += chunk));
     req.on('end', () => {
       res.setHeader('Content-Type', 'application/json');
-
-      const url = req.url || '';
       const method = req.method || 'GET';
+      const url = req.url || '';
 
-      // POST /api/v1/agent/action — unified action endpoint
       if (method === 'POST' && url === '/api/v1/agent/action') {
         const parsed = body ? JSON.parse(body) : {};
         const action = parsed.action;
@@ -30,61 +29,64 @@ function createMockServer(): http.Server {
 
         switch (action) {
           case 'search_suppliers':
-            res.end(JSON.stringify([
-              { agentId: 'sup-1', name: 'Test Supplier', score: 0.95, price: 0.05 },
-            ]));
+            res.end(JSON.stringify([{ agentId: 'sup-1', name: 'Test', score: 0.95, price: 0.05 }]));
             return;
 
           case 'create_order_from_goal':
             orderCounter++;
-            res.end(JSON.stringify({
-              orderId: `ord_smoke_${orderCounter}`,
-              title: `Order: ${params.goal}`,
-              status: 'open',
-            }));
+            res.end(JSON.stringify({ orderId: `ord_smoke_${orderCounter}`, title: `Order: ${params.goal}`, status: 'open', matchCount: 1 }));
             return;
 
           case 'select_supplier_for_order':
-            contractCounter++;
-            res.end(JSON.stringify({
-              contractId: `ctr_smoke_${contractCounter}`,
-              orderId: params.orderId,
-              supplierId: params.supplierId,
-              status: 'executing',
-            }));
+            runCounter++;
+            payoutCounter++;
+            const runId = `run_smoke_${runCounter}`;
+            runs.set(runId, { runId, orderId: params.orderId, supplierAgentId: params.supplierId, buyerAgentId: 'buyer', status: 'awaiting_start' });
+            res.end(JSON.stringify({ runId, payoutId: `pay_smoke_${payoutCounter}`, runStatus: 'awaiting_start', payoutStatus: 'held' }));
             return;
 
-          case 'submit_result':
-            res.statusCode = 200;
+          case 'start_run': {
+            const r = runs.get(params.runId);
+            if (!r) { res.statusCode = 404; res.end(JSON.stringify({ code: 'NOT_FOUND' })); return; }
+            r.status = 'in_progress';
+            res.end(JSON.stringify(r));
+            return;
+          }
+
+          case 'deliver_result': {
+            const r = runs.get(params.runId);
+            if (!r) { res.statusCode = 404; res.end(JSON.stringify({ code: 'NOT_FOUND' })); return; }
+            r.status = 'delivered';
+            r.deliveryPayload = params.deliveryPayload;
             res.end(JSON.stringify({ received: true }));
             return;
+          }
 
-          case 'get_result':
-            res.end(JSON.stringify({
-              resultId: 'res_smoke_1',
-              contractId: params.contractId,
-              data: { summary: 'test' },
-              submittedAt: new Date().toISOString(),
-            }));
+          case 'get_run_details': {
+            const r = runs.get(params.runId);
+            if (!r) { res.statusCode = 404; res.end(JSON.stringify({ code: 'NOT_FOUND' })); return; }
+            res.end(JSON.stringify(r));
+            return;
+          }
+
+          case 'cancel_order':
+            res.end(JSON.stringify({ cancelled: true }));
+            return;
+
+          case 'request_review':
+            res.end(JSON.stringify({ reviewRequested: true }));
             return;
 
           case 'suggest_next_best_action':
-            res.end(JSON.stringify({
-              action: 'search_suppliers',
-              reason: 'Start by discovering suppliers',
-            }));
+            res.end(JSON.stringify({ action: 'search_suppliers', reason: 'Start by searching' }));
             return;
 
-          case 'inspect_contract_state':
-            res.end(JSON.stringify({
-              contractId: params.contractId,
-              status: 'executing',
-              supplierId: 'sup-1',
-              buyerId: 'buyer-smoke',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }));
+          case 'inspect_deal_state': {
+            const r = [...runs.values()].find(r => r.orderId === params.orderId);
+            if (!r) { res.statusCode = 404; res.end(JSON.stringify({ code: 'NOT_FOUND' })); return; }
+            res.end(JSON.stringify(r));
             return;
+          }
 
           default:
             res.statusCode = 400;
@@ -99,7 +101,7 @@ function createMockServer(): http.Server {
   });
 }
 
-describe('Integration Smoke Test', () => {
+describe('Integration Smoke Test — Order-Workflow', () => {
   let server: http.Server;
   let port: number;
 
@@ -112,56 +114,57 @@ describe('Integration Smoke Test', () => {
     });
   });
 
-  afterAll((done) => {
-    server.close(done);
-  });
+  afterAll((done) => { server.close(done); });
 
-  it('should complete full buyer flow via Agent Action API', async () => {
-    const client = new SynapticRelayClient({
-      baseUrl: `http://localhost:${port}`,
-      apiKey: 'ac_smoke_test',
-    });
+  it('should complete full buyer flow: order → select → startRun → deliverResult', async () => {
+    const client = new SynapticRelayClient({ baseUrl: `http://localhost:${port}`, apiKey: 'ac_smoke_test' });
 
-    // 1. Search suppliers
+    // 1. Search
     const suppliers = await client.searchSuppliers({ categoryId: 'test' });
     expect(suppliers.length).toBeGreaterThan(0);
-    expect(suppliers[0].agentId).toBe('sup-1');
 
-    // 2. Create order from goal
-    const order = await client.createOrderFromGoal({ goal: 'Smoke test task', category: 'test' });
+    // 2. Create order
+    const order = await client.createOrderFromGoal({ goal: 'Smoke test', category: 'test' });
     expect(order.orderId).toMatch(/^ord_smoke_/);
+    expect(order.matchCount).toBeDefined();
 
-    // 3. Select supplier
-    const contract = await client.selectSupplierForOrder({
+    // 3. Select supplier → creates run + payout
+    const { runId, payoutId, runStatus, payoutStatus } = await client.selectSupplierForOrder({
       orderId: order.orderId,
       supplierId: suppliers[0].agentId,
     });
-    expect(contract.contractId).toMatch(/^ctr_smoke_/);
+    expect(runId).toMatch(/^run_smoke_/);
+    expect(payoutId).toMatch(/^pay_smoke_/);
+    expect(runStatus).toBe('awaiting_start');
+    expect(payoutStatus).toBe('held');
 
-    // 4. Inspect contract
-    const state = await client.inspectContractState({ contractId: contract.contractId });
-    expect(state.status).toBe('executing');
+    // 4. Start run
+    const run = await client.startRun({ runId });
+    expect(run.status).toBe('in_progress');
 
-    // 5. Get suggestion
+    // 5. Deliver result
+    await client.deliverResult({ runId, deliveryPayload: { answer: '42' } });
+
+    // 6. Get run details
+    const details = await client.getRunDetails({ runId });
+    expect(details.status).toBe('delivered');
+
+    // 7. Inspect deal state
+    const deal = await client.inspectDealState({ orderId: order.orderId });
+    expect(deal.runId).toBe(runId);
+
+    // 8. Suggestion
     const suggestion = await client.suggestNextBestAction();
     expect(suggestion.action).toBeDefined();
   });
 
-  it('should complete supplier result submission', async () => {
-    const client = new SynapticRelayClient({
-      baseUrl: `http://localhost:${port}`,
-      apiKey: 'ac_smoke_supplier',
-    });
+  it('should cancel an order', async () => {
+    const client = new SynapticRelayClient({ baseUrl: `http://localhost:${port}`, apiKey: 'ac_smoke_cancel' });
+    await client.cancelOrder({ orderId: 'ord_smoke_1' });
+  });
 
-    // Submit result
-    await client.submitResult({
-      contractId: 'ctr_smoke_1',
-      result: { answer: '42' },
-    });
-
-    // Get result
-    const result = await client.getResult({ contractId: 'ctr_smoke_1' });
-    expect(result.contractId).toBe('ctr_smoke_1');
-    expect(result.data).toHaveProperty('summary');
+  it('should request review', async () => {
+    const client = new SynapticRelayClient({ baseUrl: `http://localhost:${port}`, apiKey: 'ac_smoke_review' });
+    await client.requestReview({ orderId: 'ord_smoke_1', reasonCode: 'quality', comment: 'Output was incomplete' });
   });
 });

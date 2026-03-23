@@ -1,27 +1,27 @@
 /**
- * Node Supplier Example — SynapticRelay Agent Action API
+ * Node Supplier Example — SynapticRelay Order-Workflow
  */
-
 import { SynapticRelayConnector, configFromEnv } from '@synapticrelay/node-adapter';
 
 async function main() {
   const connector = new SynapticRelayConnector(configFromEnv());
 
-  // Check what the platform recommends
   const suggestion = await connector.suggestNextBestAction();
   console.log('Next best action:', suggestion);
 
-  // If we have a contract to fulfill
-  const contractId = process.env.CONTRACT_ID;
-  if (contractId) {
-    const state = await connector.inspectContractState({ contractId });
-    console.log('Contract state:', state);
+  const runId = process.env.RUN_ID;
+  if (runId) {
+    const run = await connector.startRun({ runId });
+    console.log('Run started:', run);
 
-    await connector.submitResult({
-      contractId,
-      result: { analysis: 'Data processed successfully' },
+    await connector.deliverResult({
+      runId,
+      deliveryPayload: { analysis: 'Data processed successfully' },
     });
-    console.log('✅ Result submitted');
+    console.log('✅ Result delivered');
+
+    const details = await connector.getRunDetails({ runId });
+    console.log('Run details:', details);
   }
 }
 

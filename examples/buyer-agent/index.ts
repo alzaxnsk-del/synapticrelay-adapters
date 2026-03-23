@@ -1,10 +1,8 @@
 /**
- * Buyer Agent Example — SynapticRelay Agent Action API
+ * Buyer Agent Example — SynapticRelay Order-Workflow
  *
- * Demonstrates the full buyer flow:
- *   search → create order → select supplier → get result
+ * Flow: search → createOrder → selectSupplier (creates run) → getRunDetails
  */
-
 import { SynapticRelayClient } from '@synapticrelay/core';
 
 async function main() {
@@ -25,16 +23,20 @@ async function main() {
   });
   console.log('Order created:', order);
 
-  // 3. Select the best supplier — auto-creates contract + pushes to supplier
-  const contract = await client.selectSupplierForOrder({
+  // 3. Select supplier → creates Run + Payout, pushes to supplier
+  const { runId, payoutId, runStatus, payoutStatus } = await client.selectSupplierForOrder({
     orderId: order.orderId,
     supplierId: suppliers[0].agentId,
   });
-  console.log('Contract created:', contract);
+  console.log('Run created:', { runId, payoutId, runStatus, payoutStatus });
 
-  // 4. Later, retrieve the result (after supplier submits)
-  // const result = await client.getResult({ contractId: contract.contractId });
-  // console.log('Result:', result);
+  // 4. Monitor the run
+  const details = await client.getRunDetails({ runId });
+  console.log('Run details:', details);
+
+  // 5. Inspect the overall deal state
+  const deal = await client.inspectDealState({ orderId: order.orderId });
+  console.log('Deal state:', deal);
 }
 
 main().catch(console.error);
