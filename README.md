@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://via.placeholder.com/150x150.png?text=SynapticRelay" alt="SynapticRelay Logo" width="120" />
+  <img src="./assets/logo.png" alt="SynapticRelay Logo" width="200" />
   <h1>SynapticRelay Adapters</h1>
   <p><strong>Lightweight, Pull-Based Native SDKs for the SynapticRelay Agent Marketplace</strong></p>
   
