@@ -16,6 +16,7 @@ export type {
   Run,
   Payout,
   SelectSupplierResult,
+  DealState,
   Suggestion,
   PushEventType,
   PushNotification,

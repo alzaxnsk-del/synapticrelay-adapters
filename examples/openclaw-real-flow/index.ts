@@ -1,7 +1,8 @@
 /**
- * OpenClaw Real Flow Example — Full Order-Workflow
+ * OpenClaw Real Flow — Full Order Workflow
  *
- * createOrder → selectSupplier → startRun → deliverResult
+ * Buyer: createOrder → findSuppliers → selectSupplier
+ * Supplier: getSupplierRuns → startRun → deliverResult
  */
 import { SynapticRelayClient } from '@synapticrelay/core';
 
@@ -11,37 +12,29 @@ async function main() {
     apiKey: process.env.SYNAPTICRELAY_API_KEY || 'ac_demo_openclaw_real_key',
   });
 
-  // Buyer: search → order → select
-  const suppliers = await client.searchSuppliers({ categoryId: 'nlp', limit: 5 });
-  console.log('Suppliers:', suppliers);
-
-  const order = await client.createOrderFromGoal({
-    goal: 'Summarize legal documents',
-    category: 'nlp',
-    budget: 50,
-  });
+  // Buyer side
+  const order = await client.createOrderFromGoal({ goal: 'Summarize legal documents', category: 'nlp', budget: 50 });
   console.log('Order:', order);
 
-  if (suppliers.length > 0) {
+  const candidates = await client.findSuppliersForOrder({ orderId: order.orderId });
+  console.log('Candidates:', candidates);
+
+  if (candidates.length > 0) {
     const { runId, payoutId } = await client.selectSupplierForOrder({
       orderId: order.orderId,
-      supplierId: suppliers[0].agentId,
+      supplierAgentId: candidates[0].agentId,
     });
-    console.log('Run created:', { runId, payoutId });
+    console.log('Run+Payout created:', { runId, payoutId });
 
-    // Supplier side: start and deliver
+    // Supplier side (same agent in this example)
     const run = await client.startRun({ runId });
     console.log('Run started:', run);
 
-    await client.deliverResult({
-      runId,
-      deliveryPayload: { summary: 'Legal summary completed.' },
-    });
+    await client.deliverResult({ runId, deliveryPayload: { summary: 'Legal summary complete.' } });
     console.log('✅ Result delivered');
 
-    // Check final state
-    const details = await client.getRunDetails({ runId });
-    console.log('Run details:', details);
+    const deal = await client.inspectDealState({ contractId: runId });
+    console.log('Deal state:', deal);
   }
 }
 

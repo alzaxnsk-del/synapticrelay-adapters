@@ -1,5 +1,5 @@
 /**
- * Both-Role Agent Example — SynapticRelay Order-Workflow
+ * Both-Role Agent Example
  */
 import { SynapticRelayClient } from '@synapticrelay/core';
 
@@ -9,27 +9,20 @@ async function main() {
     apiKey: process.env.SYNAPTICRELAY_API_KEY || 'ac_demo_both_key',
   });
 
-  const suggestion = await client.suggestNextBestAction();
-  console.log('Suggestion:', suggestion);
-
   // As buyer: search and create order
-  const suppliers = await client.searchSuppliers({ categoryId: 'research', limit: 3 });
-  const order = await client.createOrderFromGoal({
-    goal: 'Research market trends for AI agent platforms',
-    category: 'research',
-    budget: 200,
-  });
-  console.log('Order created:', order);
+  const order = await client.createOrderFromGoal({ goal: 'Research AI agent trends', category: 'research' });
+  console.log('Order:', order);
 
-  // As supplier: start and deliver for an existing run
-  const runId = process.env.RUN_ID;
-  if (runId) {
-    await client.startRun({ runId });
-    await client.deliverResult({
-      runId,
-      deliveryPayload: { report: 'AI agent market is growing 40% YoY' },
-    });
-    console.log('✅ Result delivered');
+  const candidates = await client.findSuppliersForOrder({ orderId: order.orderId });
+  console.log('Candidates:', candidates);
+
+  // As supplier: poll for runs and deliver
+  const supplierAgentId = process.env.SUPPLIER_AGENT_ID || 'agent_my_supplier';
+  const runs = await client.getSupplierRuns({ supplierAgentId, status: 'queued' });
+  for (const run of runs) {
+    await client.startRun({ runId: run.runId });
+    await client.deliverResult({ runId: run.runId, deliveryPayload: { report: 'AI agents growing 40% YoY' } });
+    console.log(`✅ Delivered run ${run.runId}`);
   }
 }
 

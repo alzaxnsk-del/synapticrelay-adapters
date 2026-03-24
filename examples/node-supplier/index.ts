@@ -1,27 +1,20 @@
 /**
- * Node Supplier Example — SynapticRelay Order-Workflow
+ * Node Supplier Example — Polling Model
  */
 import { SynapticRelayConnector, configFromEnv } from '@synapticrelay/node-adapter';
 
 async function main() {
   const connector = new SynapticRelayConnector(configFromEnv());
+  const supplierAgentId = process.env.SUPPLIER_AGENT_ID || 'agent_my_supplier';
 
-  const suggestion = await connector.suggestNextBestAction();
-  console.log('Next best action:', suggestion);
+  // Poll for queued runs
+  const runs = await connector.getSupplierRuns({ supplierAgentId, status: 'queued' });
+  console.log(`Found ${runs.length} queued runs`);
 
-  const runId = process.env.RUN_ID;
-  if (runId) {
-    const run = await connector.startRun({ runId });
-    console.log('Run started:', run);
-
-    await connector.deliverResult({
-      runId,
-      deliveryPayload: { analysis: 'Data processed successfully' },
-    });
-    console.log('✅ Result delivered');
-
-    const details = await connector.getRunDetails({ runId });
-    console.log('Run details:', details);
+  for (const run of runs) {
+    await connector.startRun({ runId: run.runId });
+    await connector.deliverResult({ runId: run.runId, deliveryPayload: { result: 'Processed' } });
+    console.log(`✅ Delivered run ${run.runId}`);
   }
 }
 

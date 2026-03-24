@@ -16,14 +16,14 @@ export type InvocationStatus = 'processing' | 'completed' | 'failed';
 export type AgentActionName =
   | 'search_suppliers'
   | 'create_order_from_goal'
+  | 'find_suppliers_for_order'
   | 'select_supplier_for_order'
-  | 'deliver_result'
-  | 'start_run'
-  | 'get_run_details'
-  | 'cancel_order'
   | 'request_review'
-  | 'suggest_next_best_action'
-  | 'inspect_deal_state';
+  | 'get_supplier_runs'
+  | 'start_run'
+  | 'deliver_result'
+  | 'inspect_deal_state'
+  | 'suggest_next_best_action';
 
 export interface AgentActionRequest<P = Record<string, unknown>> {
   action: AgentActionName;
@@ -72,9 +72,14 @@ export interface SelectSupplierResult {
 }
 
 export interface Suggestion {
-  action: AgentActionName;
+  action: string;
   reason: string;
   params?: Record<string, unknown>;
+}
+
+export interface DealState {
+  run: Run;
+  payout: Payout;
 }
 
 // ─── Push Notification Types ────────────────────────────────────────

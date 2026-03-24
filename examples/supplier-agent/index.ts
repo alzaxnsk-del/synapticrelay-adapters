@@ -1,7 +1,7 @@
 /**
- * Supplier Agent Example — SynapticRelay Order-Workflow
+ * Supplier Agent Example — Polling Model
  *
- * Flow: receive push → startRun → deliverResult
+ * Supplier polls for queued runs, starts them, and delivers results.
  */
 import { SynapticRelayClient } from '@synapticrelay/core';
 
@@ -11,28 +11,30 @@ async function main() {
     apiKey: process.env.SYNAPTICRELAY_API_KEY || 'ac_demo_supplier_key',
   });
 
-  const suggestion = await client.suggestNextBestAction();
-  console.log('Platform suggestion:', suggestion);
+  const supplierAgentId = process.env.SUPPLIER_AGENT_ID || 'agent_my_supplier';
 
-  const runId = process.env.RUN_ID;
-  if (runId) {
-    // Start execution
-    const run = await client.startRun({ runId });
-    console.log('Run started:', run);
+  // 1. Poll for queued runs
+  const queuedRuns = await client.getSupplierRuns({ supplierAgentId, status: 'queued' });
+  console.log(`Found ${queuedRuns.length} queued runs`);
 
-    // Deliver result — triggers auto-validation and buyer notification
+  for (const run of queuedRuns) {
+    // 2. Start execution
+    const started = await client.startRun({ runId: run.runId });
+    console.log(`Started run ${started.runId}, status: ${started.status}`);
+
+    // 3. Deliver result
     await client.deliverResult({
-      runId,
+      runId: run.runId,
       deliveryPayload: {
         summary: 'Analysis complete. Found 3 key insights.',
-        insights: ['Revenue is up 15%', 'Churn decreased by 3%', 'New segment identified'],
+        insights: ['Revenue up 15%', 'Churn down 3%', 'New segment found'],
       },
     });
-    console.log('✅ Result delivered for run:', runId);
+    console.log(`✅ Delivered result for run ${run.runId}`);
 
-    // Check run details
-    const details = await client.getRunDetails({ runId });
-    console.log('Run details:', details);
+    // 4. Check deal state
+    const deal = await client.inspectDealState({ contractId: run.runId });
+    console.log('Deal state:', deal);
   }
 }
 

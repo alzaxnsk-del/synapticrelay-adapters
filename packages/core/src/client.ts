@@ -6,6 +6,7 @@ import type {
   SelectSupplierResult,
   Run,
   Suggestion,
+  DealState,
 } from './types';
 import { SynapticRelayError, AuthenticationError } from './errors';
 
@@ -47,59 +48,43 @@ export class SynapticRelayClient {
     });
   }
 
-  // ─── Typed Convenience Methods ────────────────────────────────────
+  // ─── Buyer Actions ────────────────────────────────────────────────
 
   /** Search for suppliers on the marketplace. */
   async searchSuppliers(params: {
+    query?: string;
     categoryId?: string;
-    maxPrice?: number;
     limit?: number;
   } = {}): Promise<MatchCandidate[]> {
     return this.action<MatchCandidate[]>('search_suppliers', params);
   }
 
-  /** Create an order from a goal description. Returns orderId, status, matchCount. */
+  /** Create an order from a goal description + auto-shortlist. */
   async createOrderFromGoal(params: {
     goal: string;
     category?: string;
     budget?: number;
+    deadline?: string;
   }): Promise<Order> {
     return this.action<Order>('create_order_from_goal', params);
   }
 
-  /** Select a supplier for an order. Creates a Run + Payout and pushes to supplier. */
+  /** Get shortlist of candidates for an existing order. */
+  async findSuppliersForOrder(params: {
+    orderId: string;
+  }): Promise<MatchCandidate[]> {
+    return this.action<MatchCandidate[]>('find_suppliers_for_order', params);
+  }
+
+  /** Select a supplier for an order. Creates Run + Payout. */
   async selectSupplierForOrder(params: {
     orderId: string;
-    supplierId: string;
+    supplierAgentId: string;
   }): Promise<SelectSupplierResult> {
     return this.action<SelectSupplierResult>('select_supplier_for_order', params);
   }
 
-  /** Supplier starts execution of a run. */
-  async startRun(params: { runId: string }): Promise<Run> {
-    return this.action<Run>('start_run', params);
-  }
-
-  /** Supplier delivers result for a run. Triggers auto-validation and buyer notification. */
-  async deliverResult(params: {
-    runId: string;
-    deliveryPayload?: Record<string, unknown>;
-    deliveryArtifactRef?: string;
-  }): Promise<void> {
-    await this.action<void>('deliver_result', params);
-  }
-
-  /** Get details about a run (status, delivery, validation). */
-  async getRunDetails(params: { runId: string }): Promise<Run> {
-    return this.action<Run>('get_run_details', params);
-  }
-
-  /** Buyer cancels an order before a supplier is selected. */
-  async cancelOrder(params: { orderId: string }): Promise<void> {
-    await this.action<void>('cancel_order', params);
-  }
-
-  /** Buyer requests a review after result is validated. */
+  /** Buyer requests a review after result is validated (before auto-release). */
   async requestReview(params: {
     orderId: string;
     reasonCode: string;
@@ -108,14 +93,40 @@ export class SynapticRelayClient {
     await this.action<void>('request_review', params);
   }
 
-  /** Get the platform's recommendation for the next best action. */
-  async suggestNextBestAction(): Promise<Suggestion> {
-    return this.action<Suggestion>('suggest_next_best_action');
+  // ─── Supplier Actions ─────────────────────────────────────────────
+
+  /** Polling — get list of runs for supplier. Primary way to receive tasks. */
+  async getSupplierRuns(params: {
+    supplierAgentId: string;
+    status?: string;
+  }): Promise<Run[]> {
+    return this.action<Run[]>('get_supplier_runs', params);
   }
 
-  /** Inspect the current state of a deal (runs + payouts). */
-  async inspectDealState(params: { orderId: string }): Promise<Run> {
-    return this.action<Run>('inspect_deal_state', params);
+  /** Mark a run as `running` — supplier starts execution. */
+  async startRun(params: { runId: string }): Promise<Run> {
+    return this.action<Run>('start_run', params);
+  }
+
+  /** Supplier delivers result for a run. Triggers auto-validation. */
+  async deliverResult(params: {
+    runId: string;
+    deliveryPayload?: Record<string, unknown>;
+    deliveryArtifactRef?: string;
+  }): Promise<void> {
+    await this.action<void>('deliver_result', params);
+  }
+
+  // ─── Shared Actions ───────────────────────────────────────────────
+
+  /** Inspect deal state: run + payout. contractId === runId. */
+  async inspectDealState(params: { contractId: string }): Promise<DealState> {
+    return this.action<DealState>('inspect_deal_state', params);
+  }
+
+  /** Get platform recommendation for the next best action. */
+  async suggestNextBestAction(params: { context?: string } = {}): Promise<Suggestion> {
+    return this.action<Suggestion>('suggest_next_best_action', params);
   }
 
   // ─── HTTP Layer ───────────────────────────────────────────────────
