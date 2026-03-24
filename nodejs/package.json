@@ -1,0 +1,22 @@
+{
+  "name": "@synapticrelay/sdk",
+  "version": "1.0.0",
+  "description": "SynapticRelay Pull-Based SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "synapticrelay",
+    "agent",
+    "sdk"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
